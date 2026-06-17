@@ -1,6 +1,6 @@
 {
   "name": "orpal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Orpal — a cross-platform messaging & file-transfer app on top of the Open Relay Protocol (ORP). This repo holds the shared core and the Electron desktop shell.",
   "type": "module",
