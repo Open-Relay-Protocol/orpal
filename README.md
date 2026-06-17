@@ -82,28 +82,39 @@ Orpal drives **unmodified**.
 
 ## Run it
 
-Prerequisites: Node ≥ 20.
+Prerequisites: Node ≥ 20. The repo is self-contained (the Apache ORP source is
+vendored in `orp-ref/`), so a fresh `git clone` builds on macOS, Linux, or Windows
+with no sibling checkout.
 
 ```bash
-# 1. install (from this directory)
-npm install
+git clone https://github.com/ben-is-jammin/orpal
+cd orpal
 
-# 2. build the shared core (emits dist/ that the desktop renderer consumes)
-npm run build:core
-
-# 3a. run a board locally (in the ORP repo, separate terminal)
-cd ../blind-rendezvous && npm install && npm run serve:dev   # ws://127.0.0.1:8080
-
-# 3b. launch the desktop app (dev)
-npm run dev:desktop
+npm install          # 471+ deps incl. Electron; better-sqlite3 is optional
+npm run build:core   # emits packages/orpal-core/dist that the renderer consumes
+npm run dev:desktop  # launch the Electron app (dev)
 ```
 
-Point two app instances (two machines, or two OS user accounts) at the same board
-(Settings → Board URL), exchange contact cards via QR/paste, and message. For two
-NATed peers to connect you need a STUN server (one is configured by default); for
-relay-only contacts add a TURN server in Settings.
+The app talks to **`wss://board.roshew.com/`** by default — no local board needed.
+Point two app instances (two machines, or two OS user accounts) at the same board,
+open **My identity / QR** on one and **Add contact** (scan/paste) on the other, then
+message. For two NATed peers to connect you need a STUN server (one is configured by
+default); for relay-only contacts add a TURN server in Settings. To run your own
+board instead, set Settings → Board URL to `ws://127.0.0.1:8080/` and run the ORP
+reference (`npm run serve:dev` in a clone of github.com/Prograde-Solutions/orp).
 
-Package installers with `npm run dist:desktop` (electron-builder).
+### Packaging (incl. Linux)
+
+```bash
+npm run dist:desktop   # build + electron-builder for the HOST OS
+```
+
+Run this **on the target OS** (electron-builder does not cross-compile here):
+- **Linux** → AppImage + `.deb` (configured in `apps/desktop/electron-builder.yml`)
+- **macOS** → dmg + zip · **Windows** → NSIS installer
+
+On Linux, `better-sqlite3` typically compiles fine (used for history); if it
+doesn't, the app silently falls back to a JSON file store, so packaging never fails.
 
 ### SQLite note
 
