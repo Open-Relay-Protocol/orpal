@@ -31,7 +31,8 @@ The same codebase ships three ways from one shared, framework-agnostic core:
 
 - 🖥️ **Desktop** — an Electron app with OS-keychain key storage and SQLite history.
 - 🌐 **Web** — an installable Progressive Web App that runs in any modern browser.
-- 📱 **Mobile** — install the PWA today; a native Capacitor shell is on the roadmap.
+- 📱 **Mobile** — a native **Android** app (Capacitor) that bundles the web
+  renderer into an installable APK, or install the PWA from any mobile browser.
 
 ## Table of contents
 
@@ -40,6 +41,7 @@ The same codebase ships three ways from one shared, framework-agnostic core:
 - [Quick start](#quick-start)
   - [Desktop (Electron)](#desktop-electron)
   - [Web app (PWA)](#web-app-pwa)
+  - [Android (native APK)](#android-native-apk)
   - [Install on Linux](#install-on-linux)
 - [Usage](#usage)
 - [Architecture](#architecture)
@@ -88,6 +90,11 @@ The same codebase ships three ways from one shared, framework-agnostic core:
 | Clipboard       | native clipboard module       | `navigator.clipboard`                       |
 | Contact card    | QR / copy / auto-type         | QR / copy *(auto-type is desktop-only)*     |
 
+The **native Android app** (`apps/android`) bundles the **Web (PWA)** column above —
+it reuses the browser `window.orpal` inside a Capacitor WebView, so its storage
+characteristics match the Web column today (IndexedDB keys/history); see the
+[roadmap](#roadmap) for moving it onto OS-grade Keystore/SQLite plugins.
+
 The **web shell reuses the desktop renderer verbatim** (same React UI + orpal-core,
 imported via Vite aliases). The only thing that differs between shells is the
 `window.orpal` implementation: Electron backs it with privileged main-process
@@ -133,6 +140,47 @@ standalone app window with offline support.
 builds the PWA and publishes it to **GitHub Pages** (enable once under *Settings →
 Pages → Source: GitHub Actions*). The build uses a relative base, so it works at a
 domain root or a repo sub-path.
+
+### Android (native APK)
+
+The native Android shell (`apps/android`) is a **Capacitor** wrapper that bundles
+the **same web renderer** (React UI + orpal-core) into an installable APK — no dev
+server, fully self-contained. The WebView's native `RTCPeerConnection` + `WebSocket`
+back the same `BrowserWebRTCEndpoint`/`BrowserRendezvousBroker`, so orpal-core runs
+**unmodified**; only the packaging differs from the PWA.
+
+> Private keys on Android currently live in the WebView's IndexedDB (origin-scoped,
+> like the PWA) — **not** the OS Keystore yet. See the [roadmap](#roadmap) for
+> moving key storage and history onto Capacitor secure-storage plugins.
+
+**Option A — download a prebuilt APK from CI (no Android SDK needed).**
+Pushes to `master` run [`.github/workflows/build-android.yml`](.github/workflows/build-android.yml),
+which builds a debug APK uploaded as a workflow artifact (`orpal-android`). Download
+`Orpal-debug.apk` from the run's **Artifacts**, copy it to your phone, and open it —
+Android will prompt you to allow installing from this source (sideloading), then
+install **Orpal** to your app drawer. Tag a release (`git tag v0.1.0 && git push
+--tags`) to also attach the APK to a GitHub Release.
+
+**Option B — build it yourself** (needs a JDK 21 + the Android SDK, e.g. via Android
+Studio):
+
+```bash
+git clone https://github.com/ben-is-jammin/orpal && cd orpal
+npm install
+npm run sync:android          # builds the web bundle and copies it into apps/android
+cd apps/android/android
+./gradlew assembleDebug       # → app/build/outputs/apk/debug/app-debug.apk
+# install onto a connected device/emulator:
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
+
+`npm run sync:android` runs `build:web` then `npx cap sync android`, so re-run it
+whenever the UI/core changes to refresh the assets baked into the APK. To open the
+project in Android Studio instead, run `npm run open --workspace orpal-android`.
+
+> **Debug vs. release:** the CI build is a **debug** APK (debug-signed) — fine for
+> sideloading and testing. For Play Store distribution, configure a release
+> signing config and build `assembleRelease`/`bundleRelease`.
 
 ### Install on Linux
 
@@ -221,6 +269,9 @@ orpal/
 ├─ apps/web/                 # Web (PWA) shell — same renderer, browser window.orpal
 │  ├─ src/orpal/             #   browser bridge: IndexedDB keys+history, file I/O
 │  └─ public/                #   manifest + service worker + icons (installable)
+├─ apps/android/             # Native Android shell — Capacitor wraps apps/web/dist
+│  ├─ capacitor.config.ts    #   appId/appName + webDir → ../web/dist
+│  └─ android/               #   committed Gradle project (assembleDebug → APK)
 └─ orp-ref/                  # vendored Apache-2.0 ORP reference (see NOTICE)
 ```
 
@@ -284,17 +335,21 @@ The suites cover:
 
 ## Roadmap
 
-The **web (PWA) shell already runs on mobile** — install it from the browser to get
-an app on Android or iOS today (see [Web app](#web-app-pwa)). The web build is also
-the proof that orpal-core has zero Electron imports: it reuses the renderer verbatim
-and only swaps `window.orpal`.
+The **native Android shell ships today** (`apps/android`) — a Capacitor wrapper that
+bundles the web renderer into an installable APK (see [Android](#android-native-apk)),
+alongside the **PWA**, which installs from any mobile browser on Android or iOS. Both
+are proof that orpal-core has zero Electron imports: they reuse the renderer verbatim
+and only swap `window.orpal`.
 
-For a fully *native* mobile shell, a Capacitor wrapper reuses orpal-core the same
-way: swap the browser-backed `SecureKeyStore`/`ConversationStore`/file sinks for
-Capacitor plugins (Keychain/Keystore secure storage, Capacitor SQLite, Filesystem)
-to get OS-grade key storage and streamed-to-disk transfers, keep the same React UI,
-and use the WebView's native `RTCPeerConnection` + `WebSocket` — the
-`BrowserWebRTCEndpoint` and `BrowserRendezvousBroker` work as-is in a WebView.
+The Android shell currently reuses the **browser** `window.orpal` (IndexedDB keys +
+history, in-memory file handling) as-is in the WebView. The next steps harden it into
+a first-class native app: swap the browser-backed `SecureKeyStore`/`ConversationStore`/
+file sinks for Capacitor plugins (Android **Keystore** secure storage, Capacitor
+SQLite, Filesystem) for OS-grade key storage and streamed-to-disk transfers, wire the
+**camera** permission for in-app QR scanning (the `CAMERA` permission is already
+declared; pasting the card is the fallback today), and add an **iOS** target the same
+way. The same React UI and the WebView's native `RTCPeerConnection` + `WebSocket`
+(`BrowserWebRTCEndpoint`/`BrowserRendezvousBroker`) carry over unchanged.
 
 ## Contributing
 
