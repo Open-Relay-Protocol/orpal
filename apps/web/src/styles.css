@@ -700,6 +700,10 @@ textarea.mono,
   object-fit: cover;
   border: 1px solid #000;
 }
+.switch-camera {
+  width: 100%;
+  margin-top: 8px;
+}
 .error-text { color: #ffb0a8; font-size: 12.5px; }
 .info-text { color: var(--lcd); font-size: 12.5px; text-shadow: 0 0 4px rgba(79, 160, 255, 0.4); }
 .error-box { max-width: 460px; }
