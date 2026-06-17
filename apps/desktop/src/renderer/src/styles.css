@@ -331,6 +331,27 @@ textarea.mono,
   color: #cfddf8;
 }
 
+/* info footer — the ORP logo lives here, not as a brand mark */
+.sidebar-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--metal-lo);
+  background: linear-gradient(var(--panel), var(--panel-2));
+}
+.info-logo {
+  height: 20px;
+  width: auto;
+  opacity: 0.85;
+}
+.info-caption {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .badge {
   font-size: 9px;
   padding: 1px 6px;

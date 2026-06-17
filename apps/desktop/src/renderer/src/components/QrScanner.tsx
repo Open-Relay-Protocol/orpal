@@ -31,15 +31,31 @@ export function QrScanner({ onResult }: { onResult: (text: string) => void }) {
 
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        if (cancelled) return;
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("No camera API available in this context");
+        }
+        // Desktop webcams are user-facing; don't over-constrain with facingMode.
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
           raf = requestAnimationFrame(scan);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Camera unavailable");
+        const name = err instanceof DOMException ? err.name : "";
+        setError(
+          name === "NotAllowedError"
+            ? "Camera permission denied. Allow camera access (macOS: System Settings → Privacy & Security → Camera) or use Paste."
+            : name === "NotFoundError"
+              ? "No camera found. Use Paste instead."
+              : err instanceof Error
+                ? err.message
+                : "Camera unavailable",
+        );
       }
     })();
 

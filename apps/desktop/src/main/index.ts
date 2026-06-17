@@ -6,7 +6,7 @@
 // streaming file I/O. The renderer talks to these only through the preload bridge;
 // no Node API is ever exposed to it directly.
 
-import { app, BrowserWindow, ipcMain, session } from "electron";
+import { app, BrowserWindow, ipcMain, session, systemPreferences } from "electron";
 import { join } from "node:path";
 import { SecureKeyStoreMain } from "./secure-key-store.js";
 import { createConversationStore, type ClosableStore } from "./conversation-store.js";
@@ -97,6 +97,29 @@ function createWindow(): void {
   }
 }
 
+function setupMediaPermissions(): void {
+  // The renderer's QR scanner uses getUserMedia(camera). Electron denies media by
+  // default unless a handler approves it; on macOS we additionally trigger the
+  // system camera (TCC) prompt via askForMediaAccess. The packaged app declares
+  // NSCameraUsageDescription (electron-builder.yml) so that prompt can appear.
+  const ses = session.defaultSession;
+  ses.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === "media") {
+      if (process.platform === "darwin") {
+        systemPreferences
+          .askForMediaAccess("camera")
+          .then((granted) => callback(granted))
+          .catch(() => callback(false));
+        return;
+      }
+      callback(true);
+      return;
+    }
+    callback(false);
+  });
+  ses.setPermissionCheckHandler((_wc, permission) => permission === "media");
+}
+
 function applyCsp(): void {
   // A strict-ish CSP for the renderer. WebRTC ICE traffic is not governed by CSP;
   // the board connection is a WebSocket, hence ws:/wss: in connect-src.
@@ -119,6 +142,7 @@ function applyCsp(): void {
 
 app.whenReady().then(async () => {
   applyCsp();
+  setupMediaPermissions();
   await registerIpc();
   createWindow();
 

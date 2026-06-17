@@ -5,7 +5,7 @@ import { Conversation } from "./Conversation.js";
 import { IdentityModal } from "./IdentityModal.js";
 import { AddContactModal } from "./AddContactModal.js";
 import { SettingsModal } from "./SettingsModal.js";
-import orpCrab from "@/assets/orp-crab.svg";
+import { CrabMascot } from "./CrabMascot.js";
 
 function Shell() {
   const { status, errorMsg } = useOrpal();
@@ -18,7 +18,7 @@ function Shell() {
     return (
       <div className="center">
         <div className="error-box">
-          <img className="error-mascot" src={orpCrab} alt="ORP crab mascot" />
+          <CrabMascot className="error-mascot" />
           <h2>Couldn’t start</h2>
           <p className="muted">{errorMsg}</p>
         </div>

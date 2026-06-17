@@ -13,6 +13,8 @@ asarUnpack:
   - "**/node_modules/better-sqlite3/**"
 mac:
   category: public.app-category.social-networking
+  extendInfo:
+    NSCameraUsageDescription: Orpal uses the camera to scan a contact's identity QR code.
   target:
     - dmg
     - zip

@@ -20,10 +20,7 @@ export function Sidebar(props: {
     <aside className="sidebar">
       <header className="sidebar-head">
         <div className="brand-row">
-          <div className="brand-mark">
-            <img className="brand-logo" src={orpLogo} alt="ORP" />
-            <div className="brand">Orpal</div>
-          </div>
+          <div className="brand">Orpal</div>
           <div className="eq" aria-hidden="true">
             <i />
             <i />
@@ -34,7 +31,7 @@ export function Sidebar(props: {
             <i />
           </div>
         </div>
-        <div className="tagline">it really whips the llama’s ass 🦙</div>
+        <div className="tagline">it really whips the crab’s butt 🦀</div>
         <div className={`broker broker-${brokerState}`} title={identityKey}>
           <span className="dot" /> {BROKER_LABEL[brokerState] ?? brokerState}
         </div>
@@ -72,6 +69,11 @@ export function Sidebar(props: {
           );
         })}
       </div>
+
+      <footer className="sidebar-foot" title="Built on the Open Relay Protocol">
+        <img className="info-logo" src={orpLogo} alt="" aria-hidden="true" />
+        <span className="info-caption">Open Relay Protocol</span>
+      </footer>
     </aside>
   );
 }
