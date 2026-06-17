@@ -1,8 +1,7 @@
-// Web (PWA) entry point. Mirrors the desktop renderer's main.tsx, but installs
-// the BROWSER `window.orpal` bridge (IndexedDB / File System Access / clipboard)
-// before the React app mounts, instead of relying on the Electron preload. The
-// React UI and orpal-core are imported verbatim from the desktop renderer via the
-// `@` alias — there is a single copy of the UI shared by both shells.
+// Web (PWA) entry point. Installs the browser `window.orpal` bridge (IndexedDB /
+// File System Access / clipboard) before the React app mounts, then mounts the
+// shared UI. The React UI and orpal-core are imported via the `@` alias (this
+// app's own src) — a future Capacitor/Android shell wraps this same web build.
 import "@/polyfills.js"; // MUST be first: installs Buffer for orpal-core's encoding helpers
 import { createRoot } from "react-dom/client";
 import { App } from "@/components/App.js";

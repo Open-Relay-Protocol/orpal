@@ -6,7 +6,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%E2%89%A520-43853d.svg?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Platforms](https://img.shields.io/badge/platforms-desktop%20%7C%20web%20(PWA)%20%7C%20mobile-informational.svg)](#platforms)
+[![Platforms](https://img.shields.io/badge/platforms-web%20(PWA)%20%7C%20Android-informational.svg)](#platforms)
 [![Built on ORP](https://img.shields.io/badge/built%20on-ORP-6f42c1.svg)](https://github.com/Prograde-Solutions/orp)
 
 [Features](#features) · [Quick start](#quick-start) · [Architecture](#architecture) · [Security](#security) · [Contributing](#contributing)
@@ -27,22 +27,20 @@ that, **reusing** ORP's crypto, matching, sealing, ICE filtering, the two-stage
 match `Client`, and the `ReliableChannel` ACK layer rather than reimplementing any
 of it.
 
-The same codebase ships three ways from one shared, framework-agnostic core:
+The same codebase ships two ways from one shared, framework-agnostic core:
 
-- 🖥️ **Desktop** — an Electron app with OS-keychain key storage and SQLite history.
-- 🌐 **Web** — an installable Progressive Web App that runs in any modern browser.
-- 📱 **Mobile** — a native **Android** app (Capacitor) that bundles the web
-  renderer into an installable APK, or install the PWA from any mobile browser.
+- 🌐 **Web** — an installable Progressive Web App that runs in any modern Chromium
+  browser, on desktop **and** Android.
+- 📱 **Android** — a native **Capacitor** app that bundles the same web renderer
+  into an installable APK (or just install the PWA from any mobile browser).
 
 ## Table of contents
 
 - [Features](#features)
 - [Platforms](#platforms)
 - [Quick start](#quick-start)
-  - [Desktop (Electron)](#desktop-electron)
   - [Web app (PWA)](#web-app-pwa)
   - [Android (native APK)](#android-native-apk)
-  - [Install on Linux](#install-on-linux)
 - [Usage](#usage)
 - [Architecture](#architecture)
   - [Repository layout](#repository-layout)
@@ -64,41 +62,47 @@ The same codebase ships three ways from one shared, framework-agnostic core:
   (`BrowserRendezvousBroker`) that (de)serializes the SPEC §4.4 envelope with
   automatic reconnect/backoff.
 - **Identity & contacts** — generate or load your keypairs via `DeviceIdentity`;
-  private keys live **only** in OS-native secure storage (Electron `safeStorage`).
-  Your identity renders as a **QR code**; contacts import by **scanning** (webcam +
-  jsQR) or **pasting**, with full binding validation (anti-substitution).
+  private keys live in the browser's **IndexedDB** (origin-scoped; see the
+  [security caveat](#security)). Your identity renders as a **QR code**; contacts
+  import by **scanning** (webcam + jsQR) or **pasting**, with full binding
+  validation (anti-substitution).
 - **Reliable messaging** — contact list, 1:1 conversations, and per-message
   delivery state (sending → **delivered** via the §11 one-time-key ACK, or
-  **failed/retry** on `DeliveryTimeoutError`). History is persisted locally
-  (SQLite when available, JSON file fallback).
+  **failed/retry** on `DeliveryTimeoutError`). History is persisted locally in the
+  browser (**IndexedDB**).
 - **File transfer** — chunked, header-framed (id, name, size, mime, chunk
   index/total, per-file SHA-256), ACK-gated **backpressure** with a sliding window,
-  app-level idempotency, **reassembly + integrity verification**, and large files
-  **streamed to disk** (never buffered whole in the renderer).
+  app-level idempotency, and **reassembly + integrity verification**. Sending
+  streams straight off the source file; an incoming file reassembles in memory and
+  is then offered as a **download** (the web has no unprompted streaming-to-disk).
 - **Honest offline UX** — no store-and-forward: a contact shows offline when a
   match can't be made, undeliverable messages are marked failed, and rendezvous is
   re-initiated automatically on broker reconnect.
 
 ## Platforms
 
-| Capability      | Desktop (Electron)            | Web (PWA)                                   |
-| --------------- | ----------------------------- | ------------------------------------------- |
-| Private keys    | OS keychain (`safeStorage`)   | IndexedDB *(origin-scoped, not OS-grade)*   |
-| History         | SQLite (main process)         | IndexedDB                                   |
-| Send a file     | native open dialog, disk read | file picker, read via `Blob.slice`          |
-| Receive a file  | streamed to `~/Downloads`     | reassembled in memory, then **downloaded**  |
-| Clipboard       | native clipboard module       | `navigator.clipboard`                       |
-| Contact card    | QR / copy / auto-type         | QR / copy *(auto-type is desktop-only)*     |
+Both shells run the **same** React UI + orpal-core and back the same typed
+`window.orpal` contract with browser primitives:
 
-The **native Android app** (`apps/android`) bundles the **Web (PWA)** column above —
-it reuses the browser `window.orpal` inside a Capacitor WebView, so its storage
-characteristics match the Web column today (IndexedDB keys/history); see the
+| Capability      | Web (PWA) & native Android                  |
+| --------------- | ------------------------------------------- |
+| Private keys    | IndexedDB *(origin-scoped, not OS-grade)*   |
+| History         | IndexedDB                                   |
+| Send a file     | file picker, read via `Blob.slice`          |
+| Receive a file  | reassembled in memory, then **downloaded**  |
+| Clipboard       | `navigator.clipboard`                       |
+| Contact card    | QR / copy                                   |
+
+The **native Android app** (`apps/android`) is a Capacitor wrapper around the
+**web build**: it reuses the browser `window.orpal` inside a WebView, so its storage
+characteristics match the web shell today (IndexedDB keys/history); see the
 [roadmap](#roadmap) for moving it onto OS-grade Keystore/SQLite plugins.
 
-The **web shell reuses the desktop renderer verbatim** (same React UI + orpal-core,
-imported via Vite aliases). The only thing that differs between shells is the
-`window.orpal` implementation: Electron backs it with privileged main-process
-services; the web build backs the *same typed contract* with browser primitives.
+The web shell **owns the React UI** and is the single copy both targets share. The
+only thing that varies per shell is the `window.orpal` implementation — the web
+build backs the typed contract with browser primitives (IndexedDB, File System
+Access, `navigator.clipboard`), and Android reuses that same bridge inside the
+WebView.
 
 ## Quick start
 
@@ -109,20 +113,14 @@ self-contained — the Apache-2.0 ORP source is vendored in `orp-ref/`, so a fre
 ```bash
 git clone https://github.com/ben-is-jammin/orpal
 cd orpal
-npm install          # installs all workspace deps; better-sqlite3 is optional
-npm run build:core   # emits packages/orpal-core/dist that the renderers consume
-```
-
-### Desktop (Electron)
-
-```bash
-npm run dev:desktop  # launch the Electron app in dev mode
+npm install          # installs all workspace deps (no native modules)
+npm run build:core   # emits packages/orpal-core/dist that the renderer consumes
 ```
 
 ### Web app (PWA)
 
-The same app runs in any modern browser as an installable Progressive Web App, so
-it works across desktop **and** mobile with nothing to install per-OS.
+The app runs in any modern Chromium browser as an installable Progressive Web App,
+so it works across desktop **and** Android with nothing to install per-OS.
 
 ```bash
 npm run dev:web      # http://localhost:5173 (dev server)
@@ -182,54 +180,13 @@ project in Android Studio instead, run `npm run open --workspace orpal-android`.
 > sideloading and testing. For Play Store distribution, configure a release
 > signing config and build `assembleRelease`/`bundleRelease`.
 
-### Install on Linux
-
-electron-builder does **not** cross-compile Linux from macOS, so there are two ways
-to get an installable package:
-
-**Option A — download a prebuilt installer from CI (no build needed).**
-Pushes to `master` run
-[`.github/workflows/build-linux.yml`](.github/workflows/build-linux.yml) on
-`ubuntu-latest`, producing an **AppImage** and a **.deb** uploaded as a workflow
-artifact (`orpal-linux`). On your Ubuntu box:
-
-```bash
-# AppImage (portable; needs FUSE):
-sudo apt install -y libfuse2
-chmod +x Orpal-*-x64.AppImage
-./Orpal-*-x64.AppImage
-
-# or the .deb:
-sudo apt install ./Orpal-*-x64.deb       # installs "Orpal" to your apps menu
-```
-
-Tag a release (`git tag v0.1.0 && git push --tags`) to also attach the installers
-to a GitHub Release.
-
-**Option B — build it yourself on the Ubuntu machine:**
-
-```bash
-git clone https://github.com/ben-is-jammin/orpal && cd orpal
-npm install
-npm run build:core
-npm run dist:desktop          # → apps/desktop/release/*.AppImage and *.deb
-```
-
-`npm run dist:desktop` builds and runs electron-builder for the **host OS**, so it
-also produces dmg/zip on macOS and an NSIS installer on Windows.
-
-> **SQLite note:** history uses **better-sqlite3** when it builds for your
-> Node/Electron ABI, and transparently falls back to a JSON file store otherwise
-> (it's an *optional* dependency, so install never fails). To force the native
-> build for Electron: `npm run rebuild --workspace orpal-desktop`.
-
 ## Usage
 
 By default the app talks to **`wss://board.roshew.com/`**, so no local board is
 needed. To connect two peers:
 
-1. Point two app instances (two machines, or two OS user accounts) at the same
-   board.
+1. Point two app instances (two machines, two browser profiles, or a phone + a
+   laptop) at the same board.
 2. Open **My identity / QR** on one device.
 3. On the other, choose **Add contact** and scan or paste the card.
 4. Start messaging.
@@ -243,14 +200,15 @@ in a clone).
 ## Architecture
 
 The **shared core** (`packages/orpal-core`) is deliberately framework- and
-runtime-agnostic — no UI, no Electron, no Capacitor — so every shell can reuse it.
-Each shell only provides a `window.orpal` implementation of the same typed contract.
+runtime-agnostic — no UI, no shell-specific (browser or Capacitor) imports — so
+every shell can reuse it. Each shell only provides a `window.orpal` implementation
+of the same typed contract.
 
 ### Repository layout
 
 ```
 orpal/
-├─ packages/orpal-core/      # framework-agnostic TS: no UI, no Electron/Capacitor
+├─ packages/orpal-core/      # framework-agnostic TS: no UI, no browser/Capacitor imports
 │  ├─ src/orp.ts             #   the ONE seam re-exporting the ORP reference
 │  ├─ src/broker/            #   BrowserRendezvousBroker (native WebSocket)
 │  ├─ src/rtc/               #   BrowserWebRTCEndpoint (native RTCPeerConnection)
@@ -260,13 +218,10 @@ orpal/
 │  ├─ src/transfer/          #   chunking / reassembly / hashing / backpressure
 │  ├─ src/messaging/         #   OrpalClient orchestrator + app frames
 │  └─ test/                  #   round-trip, file-transfer, delivery-failure, …
-├─ apps/desktop/             # Electron shell (electron-vite + electron-builder)
-│  └─ src/
-│     ├─ main/               #   safeStorage keys, SQLite history, file I/O, IPC
-│     ├─ preload/            #   typed contextBridge → window.orpal
-│     ├─ shared/             #   the IPC contract (types + channels)
-│     └─ renderer/           #   React UI + orpal-core + native WebRTC/WebSocket
-├─ apps/web/                 # Web (PWA) shell — same renderer, browser window.orpal
+├─ apps/web/                 # Web (PWA) shell — React UI + browser window.orpal
+│  ├─ src/components/        #   React UI (conversation, sidebar, modals, QR)
+│  ├─ src/state/             #   orpal-context: app state over orpal-core
+│  ├─ src/shared/ipc.ts      #   the window.orpal contract the UI is written against
 │  ├─ src/orpal/             #   browser bridge: IndexedDB keys+history, file I/O
 │  └─ public/                #   manifest + service worker + icons (installable)
 ├─ apps/android/             # Native Android shell — Capacitor wraps apps/web/dist
@@ -301,11 +256,11 @@ relay untrusted end-to-end:
 - The board is treated as fully untrusted. All of this lives in the reference
   `Client`, which Orpal drives **unmodified**.
 
-> **Web key-storage caveat:** browsers have no OS keychain, so the web build keeps
-> private keys in IndexedDB — origin-scoped and not readable by other sites, but
-> **not** hardware/OS-protected like the desktop app. Use the web build on a trusted
-> origin (the official deployment or one you control). For the strongest key
-> protection, use the desktop app.
+> **Key-storage caveat:** browsers (and the Android WebView) have no OS keychain, so
+> the app keeps private keys in IndexedDB — origin-scoped and not readable by other
+> sites, but **not** hardware/OS-protected. Use Orpal on a trusted origin (the
+> official deployment or one you control). Moving Android onto the OS **Keystore**
+> for hardware-grade key protection is on the [roadmap](#roadmap).
 
 **Reporting a vulnerability:** please do **not** open a public issue for security
 problems. Instead, report privately via GitHub's [Security
@@ -337,9 +292,8 @@ The suites cover:
 
 The **native Android shell ships today** (`apps/android`) — a Capacitor wrapper that
 bundles the web renderer into an installable APK (see [Android](#android-native-apk)),
-alongside the **PWA**, which installs from any mobile browser on Android or iOS. Both
-are proof that orpal-core has zero Electron imports: they reuse the renderer verbatim
-and only swap `window.orpal`.
+alongside the **PWA**, which installs from any modern browser on desktop or Android.
+Both reuse the renderer verbatim and only swap `window.orpal`.
 
 The Android shell currently reuses the **browser** `window.orpal` (IndexedDB keys +
 history, in-memory file handling) as-is in the WebView. The next steps harden it into
@@ -390,3 +344,4 @@ repository; see [`NOTICE`](NOTICE) for the full attribution breakdown.
   builds on directly.
 - The [@noble](https://github.com/paulmillr/noble-hashes) cryptography libraries
   (`@noble/curves`, `@noble/ciphers`, `@noble/hashes`).
+</content>

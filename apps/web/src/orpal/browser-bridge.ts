@@ -1,9 +1,7 @@
-// Browser implementation of the `window.orpal` contract.
+// Browser implementation of the `window.orpal` contract (src/shared/ipc.ts).
 //
-// The desktop shell backs this surface with privileged Electron main-process
-// services (OS-keychain `safeStorage`, SQLite, disk file I/O, the native
-// clipboard). The web shell has none of those, so it implements the SAME typed
-// contract (apps/desktop/src/shared/ipc.ts) with browser primitives:
+// The shared React UI talks only to `window.orpal`; this module backs that typed
+// contract with browser primitives:
 //
 //   keys     → IndexedDB           (see the security note below)
 //   store    → IndexedDB
@@ -14,22 +12,22 @@
 //   clipboard→ navigator.clipboard
 //   input    → unsupported (the QR code + manual-copy field already cover this)
 //
-// Because the reused renderer talks only to `window.orpal`, swapping this in lets
-// the identical React UI + orpal-core run in any modern browser, installable as a
-// PWA across desktop and mobile.
+// Because the UI depends only on `window.orpal`, installing this bridge lets the
+// identical React UI + orpal-core run in any modern Chromium browser, installable
+// as a PWA on desktop and Android. (A future Capacitor/Android shell would back
+// the same contract with native plugins.)
 //
 // SECURITY NOTE: a browser has no OS keychain. Private keys live in IndexedDB,
 // which is origin-scoped and not readable by other sites, but is NOT
-// hardware/OS-protected the way Electron `safeStorage` is. Treat the web build as
-// convenient-and-portable rather than as strong as the native desktop app, and
-// only use it on a trusted origin you control (or the official deployment).
+// hardware/OS-protected. Treat the web build as convenient-and-portable, and only
+// use it on a trusted origin you control (or the official deployment).
 
 import { sha256 } from "@noble/hashes/sha2";
 import { bytesToHex } from "@noble/hashes/utils";
 import type { Contact, StoredKeys, StoredMessage, ListMessagesOptions } from "@orpal/core";
 import {
   DEFAULT_SETTINGS,
-  type DesktopSettings,
+  type AppSettings,
   type FilePick,
   type MessagePatch,
   type OrpalBridge,
@@ -140,11 +138,11 @@ function triggerDownload(name: string, bytes: Uint8Array<ArrayBuffer>): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-async function loadSettings(): Promise<DesktopSettings> {
+async function loadSettings(): Promise<AppSettings> {
   try {
     const raw = localStorage.getItem(SETTINGS_LS);
     if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<DesktopSettings>;
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
     return {
       boards: parsed.boards?.length ? parsed.boards : DEFAULT_SETTINGS.boards,
       iceServers: parsed.iceServers ?? DEFAULT_SETTINGS.iceServers,
@@ -179,7 +177,7 @@ const bridge: OrpalBridge = {
     listMessages: async (contactKey: string, opts: ListMessagesOptions = {}) => {
       let rows = await getAllByIndex<StoredMessage>(STORE_MESSAGES, "contactKey", contactKey);
       if (opts.before !== undefined) rows = rows.filter((m) => m.ts < opts.before!);
-      rows.sort((a, b) => b.ts - a.ts); // newest-first, matching the SQLite store
+      rows.sort((a, b) => b.ts - a.ts); // newest-first, matching listMessages' contract
       if (opts.limit !== undefined) rows = rows.slice(0, opts.limit);
       return rows;
     },
@@ -254,7 +252,7 @@ const bridge: OrpalBridge = {
 
   settings: {
     get: () => loadSettings(),
-    set: async (s: DesktopSettings) => {
+    set: async (s: AppSettings) => {
       localStorage.setItem(SETTINGS_LS, JSON.stringify(s));
     },
   },

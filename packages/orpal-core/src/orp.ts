@@ -13,9 +13,9 @@
 // We add no second crypto stack: @noble is declared at the reference's exact
 // versions (curves 1.8.1 / hashes 1.7.1 / ciphers 1.2.1).
 //
-// RUNTIME NOTE: the reference's encoding helpers use Node's `Buffer`. Orpal's two
-// shells (Electron renderer, Capacitor WebView) install a `Buffer` global before
-// loading core; Node test runs have it natively. orpal-core therefore assumes a
+// RUNTIME NOTE: the reference's encoding helpers use Node's `Buffer`. Orpal's
+// browser shells (the Chromium PWA and a Capacitor WebView) install a `Buffer`
+// global before loading core; Node test runs have it natively. orpal-core assumes a
 // global `Buffer` exists, exactly as the reference does.
 
 // ---- core: protocol transport types -----------------------------------------

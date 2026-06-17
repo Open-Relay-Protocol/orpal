@@ -1,6 +1,5 @@
 // Tiny promise wrapper over IndexedDB. The web shell persists the device's
-// private keys and the conversation history here (the Electron shell uses the OS
-// keychain + SQLite in its main process). IndexedDB is the only durable,
+// private keys and the conversation history here. IndexedDB is the only durable,
 // reasonably-sized, origin-scoped store available in every modern browser.
 
 export const DB_NAME = "orpal";

@@ -1,9 +1,9 @@
 name: deploy-web
 
 # Builds the Orpal web (PWA) shell and publishes it to GitHub Pages, so the same
-# app is reachable — and installable — from any device with a browser. Unlike the
-# Electron build there is nothing to install per-OS: visit the Pages URL and (on
-# Chromium/Edge/Android, or "Add to Home Screen" on iOS) install it as an app.
+# app is reachable — and installable — from any device with a browser. There's
+# nothing to install per-OS: visit the Pages URL and (on Chromium/Edge/Android, or
+# "Add to Home Screen" on iOS) install it as an app.
 #
 # Enable once under Settings → Pages → Source: "GitHub Actions".
 

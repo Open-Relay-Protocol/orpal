@@ -1,6 +1,6 @@
-// Wire orpal-core together in the renderer: native WebSocket broker, native
-// RTCPeerConnection endpoints (the default factory inside OrpalClient), OS-keychain
-// identity, SQLite history, and streaming file I/O — all via the IPC bridge.
+// Wire orpal-core together for the UI: native WebSocket broker, native
+// RTCPeerConnection endpoints (the default factory inside OrpalClient), and
+// identity / history / file I/O via the `window.orpal` bridge.
 
 import {
   BrowserRendezvousBroker,
@@ -8,7 +8,7 @@ import {
   OrpalClient,
   type DeviceIdentity,
 } from "@orpal/core";
-import { DEFAULT_SETTINGS, type DesktopSettings } from "@shared/ipc";
+import { DEFAULT_SETTINGS, type AppSettings } from "@shared/ipc";
 import {
   IpcConversationStore,
   IpcSecureKeyStore,
@@ -19,7 +19,7 @@ export interface OrpalApp {
   orpal: OrpalClient;
   identity: DeviceIdentity;
   createdIdentity: boolean;
-  settings: DesktopSettings;
+  settings: AppSettings;
 }
 
 export async function createOrpalApp(): Promise<OrpalApp> {

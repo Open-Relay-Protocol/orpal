@@ -1,8 +1,8 @@
 // Persistence abstraction for the device's PRIVATE keys.
 //
-// orpal-core never touches OS keychains directly (that's shell territory:
-// Electron `safeStorage` in the main process, Capacitor Keychain/Keystore on
-// mobile). It only defines this interface; a shell provides the implementation.
+// orpal-core never touches secure storage directly (that's shell territory: the
+// browser's IndexedDB on the web, Capacitor Keychain/Keystore on Android). It only
+// defines this interface; a shell provides the implementation.
 // The contract is deliberately tiny and only ever moves the two private keys.
 
 /** The only material an identity needs to be reconstructed via

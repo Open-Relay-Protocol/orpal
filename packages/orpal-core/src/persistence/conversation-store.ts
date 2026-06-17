@@ -2,8 +2,8 @@
 //
 // The protocol stores NOTHING (no store-and-forward; the board is RAM-only and
 // blind — SPEC §0/§9.1), so durable history is entirely the app's job. orpal-core
-// defines the interface; a shell supplies the implementation (Electron: SQLite in
-// the main process; mobile: a Capacitor SQLite plugin). Keeping it behind this
+// defines the interface; a shell supplies the implementation (web: IndexedDB;
+// Android: a Capacitor SQLite plugin). Keeping it behind this
 // interface lets both shells — and the tests — reuse the messaging layer.
 
 import type { Contact } from "../contacts/contact.js";

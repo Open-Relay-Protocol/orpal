@@ -1,9 +1,9 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 // The Android shell deliberately reuses the *web* build verbatim: `npm run
-// build:web` emits apps/web/dist (the same React UI + orpal-core that the desktop
-// and PWA shells run), and Capacitor bundles that directory into the APK so the
-// app is fully self-contained — no dev server, no remote URL. orpal-core stays
+// build:web` emits apps/web/dist (the same React UI + orpal-core the PWA shell
+// runs), and Capacitor bundles that directory into the APK so the app is fully
+// self-contained — no dev server, no remote URL. orpal-core stays
 // untouched; the WebView's native RTCPeerConnection + WebSocket back the same
 // BrowserWebRTCEndpoint / BrowserRendezvousBroker the PWA already uses.
 const config: CapacitorConfig = {

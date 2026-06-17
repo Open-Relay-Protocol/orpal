@@ -3,8 +3,8 @@
 //
 // The ORP reference ships only MockWebRTC (in-memory, zero crypto, for tests) and
 // RealWebRTC (werift, Node). This is the third implementation the spec calls for:
-// a real ICE + DTLS + SCTP data channel using the RTCPeerConnection the Electron
-// renderer / Capacitor WebView already provides. It conforms to the reference's
+// a real ICE + DTLS + SCTP data channel using the RTCPeerConnection the browser /
+// Capacitor WebView already provides. It conforms to the reference's
 // `WebRTCEndpoint` interface unchanged, so the reference Client drives it with no
 // modification — swapping the factory is the whole integration.
 //
