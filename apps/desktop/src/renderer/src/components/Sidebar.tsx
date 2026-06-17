@@ -18,7 +18,19 @@ export function Sidebar(props: {
   return (
     <aside className="sidebar">
       <header className="sidebar-head">
-        <div className="brand">Orpal</div>
+        <div className="brand-row">
+          <div className="brand">Orpal</div>
+          <div className="eq" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </div>
+        </div>
+        <div className="tagline">it really whips the llama’s ass 🦙</div>
         <div className={`broker broker-${brokerState}`} title={identityKey}>
           <span className="dot" /> {BROKER_LABEL[brokerState] ?? brokerState}
         </div>

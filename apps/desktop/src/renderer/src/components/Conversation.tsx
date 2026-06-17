@@ -48,8 +48,11 @@ export function Conversation() {
     <main className="conversation">
       <header className="convo-header">
         <div className="convo-title">
-          <span className="convo-h-name">{convo?.name ?? shortKey(selected)}</span>
-          <span className={`presence presence-${state}`}>{presenceText(state)}</span>
+          <span className="convo-h-name marquee">
+            <span>
+              {convo?.name ?? shortKey(selected)} · {presenceText(state)} ···
+            </span>
+          </span>
         </div>
         <div className="convo-header-actions">
           {convo?.known && (
