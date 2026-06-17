@@ -17,8 +17,8 @@ export function IdentityModal({ onClose }: { onClose: () => void }) {
       .catch(() => setDataUrl(""));
   }, [ownCard]);
 
-  // Native OS clipboard via the main process — the sandboxed renderer can't
-  // reliably write through navigator.clipboard, so route through the bridge.
+  // Copy through the bridge so the UI stays shell-agnostic; the browser shell
+  // backs window.orpal.clipboard with navigator.clipboard.
   const copy = async () => {
     try {
       await window.orpal.clipboard.writeText(ownCard);

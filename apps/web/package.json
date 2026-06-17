@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "private": true,
   "type": "module",
-  "description": "Orpal web (PWA) shell — the same React UI + orpal-core running in any Chromium/modern browser, installable across desktop and mobile. Replaces the Electron main-process services (OS-keychain keys, SQLite history, disk file I/O) with browser equivalents (IndexedDB, File System Access / in-memory download) behind the same window.orpal contract.",
+  "description": "Orpal web (PWA) shell — the React UI + orpal-core running in any Chromium/modern browser, installable on desktop and Android. Backs the window.orpal contract with browser primitives (IndexedDB for keys + history, File System Access / in-memory download for file transfer, navigator.clipboard).",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

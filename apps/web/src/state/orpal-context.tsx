@@ -15,7 +15,7 @@ import {
   type OrpalClient,
   type StoredMessage,
 } from "@orpal/core";
-import type { DesktopSettings } from "@shared/ipc";
+import type { AppSettings } from "@shared/ipc";
 import { createOrpalApp } from "../orpal/setup.js";
 import { makeFileSource } from "../orpal/bridge-stores.js";
 
@@ -39,7 +39,7 @@ interface OrpalContextValue {
   messages: StoredMessage[];
   connectionOf: (key: string) => ContactState;
   brokerState: BrokerState;
-  settings: DesktopSettings;
+  settings: AppSettings;
   settingsNeedRestart: boolean;
 
   select: (key: string | null) => void;
@@ -54,7 +54,7 @@ interface OrpalContextValue {
   ) => Promise<{ ok: boolean; reason?: string }>;
   removeContact: (key: string) => Promise<void>;
   setRelayOnly: (key: string, value: boolean) => Promise<void>;
-  saveSettings: (s: DesktopSettings) => Promise<void>;
+  saveSettings: (s: AppSettings) => Promise<void>;
   reveal: (path: string) => void;
 }
 
@@ -79,7 +79,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [messagesByContact, setMessagesByContact] = useState<Record<string, StoredMessage[]>>({});
   const [connByContact, setConnByContact] = useState<Record<string, ContactState>>({});
   const [brokerState, setBrokerState] = useState<BrokerState>("connecting");
-  const [settings, setSettings] = useState<DesktopSettings | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsNeedRestart, setSettingsNeedRestart] = useState(false);
 
   const upsertMessage = useCallback((m: StoredMessage) => {
@@ -207,7 +207,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts],
   );
 
-  const saveSettings = useCallback(async (s: DesktopSettings) => {
+  const saveSettings = useCallback(async (s: AppSettings) => {
     await window.orpal.settings.set(s);
     setSettings(s);
     setSettingsNeedRestart(true); // board/ICE changes apply on next launch

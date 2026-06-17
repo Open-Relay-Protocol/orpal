@@ -7,15 +7,9 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../desktop/src/renderer/src/*"],
-      "@shared/*": ["../desktop/src/shared/*"]
+      "@/*": ["src/*"],
+      "@shared/*": ["src/shared/*"]
     }
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "../desktop/src/renderer/src/**/*.ts",
-    "../desktop/src/renderer/src/**/*.tsx",
-    "../desktop/src/shared/**/*.ts"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

@@ -2,14 +2,14 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// The web shell reuses the desktop renderer's React UI verbatim (no Electron in
-// it — see apps/desktop/src/renderer) and swaps the IPC `window.orpal` bridge for
-// a browser one (src/orpal/browser-bridge.ts). Aliases point the reused renderer
-// sources and their `@`/`@shared` imports at the desktop tree so there's a single
-// copy of the UI; only the bridge differs between shells.
+// The web shell owns the React UI (src/components, src/state, …) and backs the
+// `window.orpal` contract (src/shared/ipc.ts) with a browser bridge
+// (src/orpal/browser-bridge.ts). The `@`/`@shared` aliases below are kept so the
+// UI's existing `@/…` and `@shared/…` imports resolve to this app's own sources —
+// a future Capacitor/Android shell wraps this same web build.
 const here = __dirname;
-const rendererSrc = resolve(here, "../desktop/src/renderer/src");
-const sharedSrc = resolve(here, "../desktop/src/shared");
+const rendererSrc = resolve(here, "src");
+const sharedSrc = resolve(here, "src/shared");
 
 export default defineConfig({
   root: here,

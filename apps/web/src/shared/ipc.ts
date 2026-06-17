@@ -1,9 +1,10 @@
-// The typed contract for the main↔renderer IPC bridge.
+// The typed `window.orpal` contract between the shared React UI and the shell.
 //
-// Shared by the main process (which implements the handlers), the preload (which
-// exposes them on `window.orpal` via contextBridge), and the renderer (which
-// consumes them). All @orpal/core imports here are TYPE-ONLY, so this file pulls
-// no runtime code into any of the three contexts.
+// The UI is written against this surface; a shell supplies the implementation —
+// today the browser bridge (src/orpal/browser-bridge.ts, backed by IndexedDB /
+// File System Access / navigator.clipboard), and a future Capacitor/Android shell
+// the same way. All @orpal/core imports here are TYPE-ONLY, so this file pulls no
+// runtime code into the UI.
 
 import type {
   Contact,
@@ -13,8 +14,8 @@ import type {
 } from "@orpal/core";
 
 /** A STUN/TURN server entry. Structurally compatible with the DOM's
- *  RTCIceServer, but defined locally so this shared contract doesn't require the
- *  DOM lib (it's compiled in the Node main process too). */
+ *  RTCIceServer, but defined locally so this shared contract stays
+ *  self-describing and independent of the DOM lib. */
 export interface IceServer {
   urls: string | string[];
   username?: string;
@@ -22,7 +23,7 @@ export interface IceServer {
 }
 
 /** Persisted app settings (board endpoints, ICE servers, relay-only default). */
-export interface DesktopSettings {
+export interface AppSettings {
   /** One or more boards to federate over (ws:// or wss://). */
   boards: string[];
   iceServers: IceServer[];
@@ -50,15 +51,15 @@ export interface WriteHandle {
 
 export type MessagePatch = Partial<Pick<StoredMessage, "state" | "text" | "file">>;
 
-/** The full surface exposed to the renderer as `window.orpal`. */
+/** The full surface exposed to the UI as `window.orpal`. */
 export interface OrpalBridge {
-  /** OS-keychain-protected private key storage (Electron safeStorage). */
+  /** Private key storage (IndexedDB in the browser shell). */
   keys: {
     load(): Promise<StoredKeys | null>;
     save(keys: StoredKeys): Promise<void>;
     clear(): Promise<void>;
   };
-  /** Local conversation history (SQLite in the main process). */
+  /** Local conversation history (IndexedDB in the browser shell). */
   store: {
     init(): Promise<void>;
     upsertContact(contact: Contact): Promise<void>;
@@ -69,7 +70,7 @@ export interface OrpalBridge {
     updateMessage(id: string, patch: MessagePatch): Promise<void>;
     listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;
   };
-  /** Streaming file I/O for transfers — bytes never buffer whole in the renderer. */
+  /** Streaming file I/O for transfers — bytes are never buffered whole in memory. */
   files: {
     pickForSend(): Promise<FilePick | null>;
     openRead(path: string): Promise<ReadHandle>;
@@ -83,15 +84,12 @@ export interface OrpalBridge {
     reveal(path: string): Promise<void>;
   };
   settings: {
-    get(): Promise<DesktopSettings>;
-    set(settings: DesktopSettings): Promise<void>;
+    get(): Promise<AppSettings>;
+    set(settings: AppSettings): Promise<void>;
   };
-  /** Native OS clipboard, backed by Electron's main-process `clipboard` module.
-   *  The renderer is sandboxed (contextIsolation + sandbox), where
-   *  `navigator.clipboard.writeText` is unreliable/permission-gated and fails
-   *  silently — so contact-card copying goes through here instead. The Electron
-   *  module handles the per-OS backends (Win32, NSPasteboard, X11/Wayland)
-   *  transparently. */
+  /** Clipboard access for contact-card copying. Routed through the bridge so the
+   *  shared UI stays shell-agnostic; the browser shell backs it with
+   *  `navigator.clipboard`. */
   clipboard: {
     writeText(text: string): Promise<void>;
     readText(): Promise<string>;
@@ -104,42 +102,7 @@ export interface OrpalBridge {
   };
 }
 
-/** IPC channel names. One per bridge method; kept in one place to avoid typos. */
-export const CH = {
-  keysLoad: "keys:load",
-  keysSave: "keys:save",
-  keysClear: "keys:clear",
-
-  storeInit: "store:init",
-  storeUpsertContact: "store:upsertContact",
-  storeListContacts: "store:listContacts",
-  storeGetContact: "store:getContact",
-  storeRemoveContact: "store:removeContact",
-  storeAppendMessage: "store:appendMessage",
-  storeUpdateMessage: "store:updateMessage",
-  storeListMessages: "store:listMessages",
-
-  filePickForSend: "file:pickForSend",
-  fileOpenRead: "file:openRead",
-  fileReadChunk: "file:readChunk",
-  fileHash: "file:hash",
-  fileCloseRead: "file:closeRead",
-  fileOpenWrite: "file:openWrite",
-  fileWriteChunk: "file:writeChunk",
-  fileFinalizeWrite: "file:finalizeWrite",
-  fileAbortWrite: "file:abortWrite",
-  fileReveal: "file:reveal",
-
-  settingsGet: "settings:get",
-  settingsSet: "settings:set",
-
-  clipboardWrite: "clipboard:write",
-  clipboardRead: "clipboard:read",
-
-  inputAutoType: "input:autoType",
-} as const;
-
-export const DEFAULT_SETTINGS: DesktopSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   // Default to the deployed reference board. Add more in Settings (e.g. a
   // locally-run board ws://127.0.0.1:8080/ via `npm run serve:dev` in the ORP repo).
   boards: ["wss://board.roshew.com/"],

@@ -1,6 +1,6 @@
-// Adapters that satisfy orpal-core's runtime-agnostic interfaces using the
-// Electron IPC bridge (window.orpal). This is the seam where the framework-
-// agnostic core meets the desktop shell's privileged main-process services.
+// Adapters that satisfy orpal-core's runtime-agnostic interfaces by delegating to
+// the `window.orpal` bridge. This is the seam where the framework-agnostic core
+// meets the shell's storage and file services (the browser bridge today).
 
 import type {
   ConversationStore,
@@ -16,7 +16,7 @@ import type {
 } from "@orpal/core";
 import type { FilePick, MessagePatch } from "@shared/ipc";
 
-/** Private keys via the OS keychain (Electron safeStorage in main). */
+/** Private keys via the shell's secure storage (IndexedDB in the browser bridge). */
 export class IpcSecureKeyStore implements SecureKeyStore {
   load(): Promise<StoredKeys | null> {
     return window.orpal.keys.load();
@@ -29,7 +29,7 @@ export class IpcSecureKeyStore implements SecureKeyStore {
   }
 }
 
-/** Conversation history via SQLite in main. */
+/** Conversation history via the shell's store (IndexedDB in the browser bridge). */
 export class IpcConversationStore implements ConversationStore {
   init(): Promise<void> {
     return window.orpal.store.init();
