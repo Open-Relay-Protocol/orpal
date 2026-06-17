@@ -1,6 +1,6 @@
 {
   "name": "@orpal/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Framework-agnostic Orpal core: ORP broker + native WebRTC endpoint, identity, messaging and file-transfer over ReliableChannel, and local persistence abstractions. No UI, no Electron/Capacitor imports.",
   "type": "module",
