@@ -1,0 +1,31 @@
+{
+  "name": "orpal-web",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Orpal web (PWA) shell — the same React UI + orpal-core running in any Chromium/modern browser, installable across desktop and mobile. Replaces the Electron main-process services (OS-keychain keys, SQLite history, disk file I/O) with browser equivalents (IndexedDB, File System Access / in-memory download) behind the same window.orpal contract.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@noble/hashes": "1.7.1",
+    "@orpal/core": "*",
+    "buffer": "^6.0.3",
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.11"
+  },
+  "license": "Apache-2.0"
+}

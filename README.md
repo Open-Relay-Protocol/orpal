@@ -28,13 +28,24 @@ client-desktop/
 │  ├─ src/transfer/          #   chunking / reassembly / hashing / backpressure
 │  ├─ src/messaging/         #   OrpalClient orchestrator + app frames
 │  └─ test/                  #   round-trip, file-transfer, delivery-failure, …
-└─ apps/desktop/             # Electron shell (electron-vite + electron-builder)
-   └─ src/
-      ├─ main/               #   safeStorage keys, SQLite history, file I/O, IPC
-      ├─ preload/            #   typed contextBridge → window.orpal
-      ├─ shared/             #   the IPC contract (types + channels)
-      └─ renderer/           #   React UI + orpal-core + native WebRTC/WebSocket
+├─ apps/desktop/             # Electron shell (electron-vite + electron-builder)
+│  └─ src/
+│     ├─ main/               #   safeStorage keys, SQLite history, file I/O, IPC
+│     ├─ preload/            #   typed contextBridge → window.orpal
+│     ├─ shared/             #   the IPC contract (types + channels)
+│     └─ renderer/           #   React UI + orpal-core + native WebRTC/WebSocket
+└─ apps/web/                 # Web (PWA) shell — same renderer, browser window.orpal
+   ├─ src/orpal/             #   browser bridge: IndexedDB keys+history, file I/O
+   └─ public/                #   manifest + service worker + icons (installable)
 ```
+
+The **web shell reuses the desktop renderer verbatim** (same React UI + orpal-core,
+imported via Vite aliases — there's one copy of the UI). The only thing that differs
+between shells is the `window.orpal` implementation: Electron backs it with
+privileged main-process services; the web build backs the *same typed contract* with
+browser primitives (IndexedDB for keys + history, the file picker / in-memory
+download for transfers, `navigator.clipboard`). That's the "swap the IPC-backed
+stores, keep the same UI" plan the core was designed for.
 
 ### How the ORP reference is consumed
 
@@ -102,6 +113,50 @@ message. For two NATed peers to connect you need a STUN server (one is configure
 default); for relay-only contacts add a TURN server in Settings. To run your own
 board instead, set Settings → Board URL to `ws://127.0.0.1:8080/` and run the ORP
 reference (`npm run serve:dev` in a clone of github.com/Prograde-Solutions/orp).
+
+### Web app (PWA) — use it on any device
+
+The same app runs in any modern browser as an installable **Progressive Web App**,
+so it works across desktop **and** mobile with nothing to install per-OS.
+
+```bash
+npm install
+npm run dev:web      # http://localhost:5173 (dev server)
+# or a production build:
+npm run build:web    # → apps/web/dist (static; deploy anywhere)
+npm run preview:web  # serve the built bundle locally
+```
+
+Open the dev/deployed URL and, on Chromium/Edge/Android, use the browser's
+**Install** action (on iOS Safari: *Share → Add to Home Screen*) to get a
+standalone app window with offline support.
+
+**Hosted build:** pushes to `master` run `.github/workflows/deploy-web.yml`, which
+builds the PWA and publishes it to **GitHub Pages** (enable once under
+*Settings → Pages → Source: GitHub Actions*). The build uses a relative base, so it
+works at a domain root or a repo sub-path. Like the desktop app it defaults to
+`wss://board.roshew.com/` and is configurable in Settings.
+
+How the web shell differs from desktop (same UI, different `window.orpal`):
+
+| Capability      | Desktop (Electron)            | Web (PWA)                                   |
+| --------------- | ----------------------------- | ------------------------------------------- |
+| Private keys    | OS keychain (`safeStorage`)   | IndexedDB *(origin-scoped, not OS-grade)*   |
+| History         | SQLite (main process)         | IndexedDB                                   |
+| Send a file     | native open dialog, disk read | file picker, read via `Blob.slice`          |
+| Receive a file  | streamed to `~/Downloads`     | reassembled in memory, then **downloaded**  |
+| Clipboard       | native clipboard module       | `navigator.clipboard`                       |
+| Contact card    | QR / copy / auto-type         | QR / copy *(auto-type is desktop-only)*     |
+
+> **Security note:** browsers have no OS keychain, so the web build keeps private
+> keys in IndexedDB — origin-scoped and not readable by other sites, but **not**
+> hardware/OS-protected like the desktop app. Use the web build on a trusted origin
+> (the official deployment or one you control). For the strongest key protection,
+> use the desktop app.
+>
+> **Large-file note:** the web build has no unprompted streaming-to-disk, so an
+> *incoming* file reassembles in memory before being offered as a download (the
+> desktop app streams straight to disk). Sending streams off the source file fine.
 
 ### Install on Ubuntu / Linux
 
@@ -171,9 +226,15 @@ Covers the required areas and more:
 
 ## Mobile (next)
 
-orpal-core has zero Electron imports, so the Capacitor shell reuses it directly:
-swap the IPC-backed `SecureKeyStore`/`ConversationStore`/file sinks for Capacitor
-plugins (Keychain/Keystore secure storage, Capacitor SQLite, Filesystem), keep the
-same React UI, and use the WebView's native `RTCPeerConnection` + `WebSocket` — the
+The **web (PWA) shell already runs on mobile** — install it from the browser to get
+an app on Android or iOS today (see [Web app](#web-app-pwa--use-it-on-any-device)).
+The web build is also the proof that orpal-core has zero Electron imports: it reuses
+the renderer verbatim and only swaps `window.orpal`.
+
+For a fully *native* mobile shell, a Capacitor wrapper reuses orpal-core the same
+way: swap the browser-backed `SecureKeyStore`/`ConversationStore`/file sinks for
+Capacitor plugins (Keychain/Keystore secure storage, Capacitor SQLite, Filesystem)
+to get OS-grade key storage and streamed-to-disk transfers, keep the same React UI,
+and use the WebView's native `RTCPeerConnection` + `WebSocket` — the
 `BrowserWebRTCEndpoint` and `BrowserRendezvousBroker` work as-is in a WebView.
 ```

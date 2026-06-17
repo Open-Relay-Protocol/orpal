@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../desktop/src/renderer/src/*"],
+      "@shared/*": ["../desktop/src/shared/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "../desktop/src/renderer/src/**/*.ts",
+    "../desktop/src/renderer/src/**/*.tsx",
+    "../desktop/src/shared/**/*.ts"
+  ]
+}

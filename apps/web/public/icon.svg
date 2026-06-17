@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Orpal">
+  <defs>
+    <linearGradient id="orpBall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3179e8"/>
+      <stop offset="1" stop-color="#1c4fa8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0b0d12"/>
+  <!-- ORP logo (orig viewBox 0 0 256 168) scaled to width 400, centered -->
+  <g transform="translate(56 125) scale(1.5625)">
+    <g fill="#2766d6">
+      <polygon points="61,33 75,33 68,20"/>
+      <polygon points="79,24 93,24 86,11"/>
+      <polygon points="97,18 111,18 104,5"/>
+      <polygon points="121,15 135,15 128,2"/>
+      <polygon points="145,18 159,18 152,5"/>
+      <polygon points="163,24 177,24 170,11"/>
+      <polygon points="181,33 195,33 188,20"/>
+    </g>
+    <path d="M14 84 Q128 18 242 84 Q128 150 14 84 Z" fill="url(#orpBall)"/>
+    <text x="128" y="86" text-anchor="middle" dominant-baseline="central"
+          font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900"
+          font-size="74" letter-spacing="2" fill="#ffffff">ORP</text>
+  </g>
+</svg>

@@ -1,0 +1,60 @@
+name: deploy-web
+
+# Builds the Orpal web (PWA) shell and publishes it to GitHub Pages, so the same
+# app is reachable — and installable — from any device with a browser. Unlike the
+# Electron build there is nothing to install per-OS: visit the Pages URL and (on
+# Chromium/Edge/Android, or "Add to Home Screen" on iOS) install it as an app.
+#
+# Enable once under Settings → Pages → Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Allow this workflow to publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One concurrent deployment; don't cancel an in-progress publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build shared core
+        run: npm run build:core
+
+      - name: Build web (PWA)
+        run: npm run build --workspace orpal-web
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
