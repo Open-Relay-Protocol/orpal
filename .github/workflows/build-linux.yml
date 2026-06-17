@@ -1,9 +1,11 @@
 name: build-linux
 
-# Builds installable Ubuntu/Linux packages (AppImage + .deb) on a real Linux
-# runner — electron-builder can't reliably cross-build Linux from macOS. The
-# installers are uploaded as workflow artifacts you can download from the Actions
-# tab (and attached to a GitHub Release when you push a v* tag).
+# Builds installable Ubuntu/Linux packages (AppImage + .deb) on real Linux
+# runners — electron-builder can't reliably cross-build Linux from macOS, and
+# orpal-core's native modules (e.g. better-sqlite3) don't cross-compile cleanly,
+# so each architecture is built on its own native runner. The installers are
+# uploaded as workflow artifacts you can download from the Actions tab (and
+# attached to a GitHub Release when you push a v* tag).
 
 on:
   push:
@@ -13,7 +15,15 @@ on:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04      # x86_64
+            arch: x64
+          - runner: ubuntu-24.04-arm  # GitHub-hosted arm64 runner
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,14 +45,25 @@ jobs:
         working-directory: apps/desktop
         run: npx electron-vite build
 
-      - name: Package AppImage + .deb
+      # Build natively for the runner's architecture. Running on a native arm64
+      # runner means any native deps resolve to arm64 prebuilds/rebuilds — no
+      # cross-compile. The t64 | old .deb dependency alternatives live in
+      # electron-builder.yml and apply to both arches.
+      - name: Package AppImage + .deb (${{ matrix.arch }})
         working-directory: apps/desktop
-        run: npx electron-builder --linux --publish never
+        run: npx electron-builder --linux --${{ matrix.arch }} --publish never
+
+      - name: Verify .deb architecture
+        working-directory: apps/desktop
+        run: |
+          deb=$(ls release/*.deb | head -n1)
+          echo "Inspecting $deb"
+          dpkg-deb -f "$deb" Architecture
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: orpal-linux
+          name: orpal-linux-${{ matrix.arch }}
           path: |
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.deb
