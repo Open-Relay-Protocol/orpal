@@ -1,16 +1,19 @@
 appId: com.prograde.orpal
 productName: Orpal
+# Set explicitly: in an npm workspace `electron` is hoisted to the root
+# node_modules, so electron-builder (run from apps/desktop) can't auto-detect it.
+electronVersion: 33.2.1
 directories:
   output: release
   buildResources: build
 files:
   - out/**/*
   - package.json
-# better-sqlite3 is a native module: ship its prebuilt binary and rebuild for the
-# target Electron ABI at packaging time.
-npmRebuild: true
-asarUnpack:
-  - "**/node_modules/better-sqlite3/**"
+# Don't rebuild native modules at packaging time. better-sqlite3 is an optional
+# dependency hoisted by the workspace; rather than fight that during packaging we
+# ship without it and the app uses its JSON-store fallback (SPEC-equivalent, just
+# no SQLite). Build locally on Linux with `npm run dist:desktop` to include it.
+npmRebuild: false
 mac:
   category: public.app-category.social-networking
   extendInfo:
