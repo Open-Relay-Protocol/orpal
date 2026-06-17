@@ -39,7 +39,15 @@ jobs:
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        # Regenerate the lockfile on the runner before installing. The committed
+        # package-lock.json is generated on macOS and, due to an npm optional-
+        # dependency bug (npm/cli#4828), records only the host platform's native
+        # rollup/esbuild binaries — so a Linux runner can't find
+        # @rollup/rollup-linux-x64-gnu and `vite build` fails. Installing from a
+        # fresh, Linux-resolved tree pulls in the correct platform binaries.
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund
 
       # build:web also builds @orpal/core (see root package.json); it emits
       # apps/web/dist, which Capacitor bundles into the APK.
