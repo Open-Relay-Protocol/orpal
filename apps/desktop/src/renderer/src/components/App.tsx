@@ -18,7 +18,7 @@ function Shell() {
     return (
       <div className="center">
         <div className="error-box">
-          <CrabMascot className="error-mascot" />
+          <CrabMascot className="error-mascot" status="down" />
           <h2>Couldn’t start</h2>
           <p className="muted">{errorMsg}</p>
         </div>

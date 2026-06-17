@@ -251,7 +251,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     messages: selected ? messagesByContact[selected] ?? [] : [],
     connectionOf,
     brokerState,
-    settings: settings ?? { boardUrl: "", iceServers: [], relayOnlyByDefault: false },
+    settings: settings ?? { boards: [], iceServers: [], relayOnlyByDefault: false },
     settingsNeedRestart,
     select,
     sendText,

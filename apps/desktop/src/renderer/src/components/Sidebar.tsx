@@ -31,7 +31,7 @@ export function Sidebar(props: {
             <i />
           </div>
         </div>
-        <div className="tagline">it really whips the crab’s butt 🦀</div>
+        <div className="tagline">it really cracks the crab’s back 🦀</div>
         <div className={`broker broker-${brokerState}`} title={identityKey}>
           <span className="dot" /> {BROKER_LABEL[brokerState] ?? brokerState}
         </div>

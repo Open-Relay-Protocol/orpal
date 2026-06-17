@@ -21,9 +21,10 @@ export interface IceServer {
   credential?: string;
 }
 
-/** Persisted app settings (board endpoint, ICE servers, relay-only default). */
+/** Persisted app settings (board endpoints, ICE servers, relay-only default). */
 export interface DesktopSettings {
-  boardUrl: string;
+  /** One or more boards to federate over (ws:// or wss://). */
+  boards: string[];
   iceServers: IceServer[];
   relayOnlyByDefault: boolean;
 }
@@ -118,9 +119,9 @@ export const CH = {
 } as const;
 
 export const DEFAULT_SETTINGS: DesktopSettings = {
-  // Default to the deployed reference board. Override in Settings to point at a
-  // locally-run board (ws://127.0.0.1:8080/ via `npm run serve:dev` in the ORP repo).
-  boardUrl: "wss://board.roshew.com/",
+  // Default to the deployed reference board. Add more in Settings (e.g. a
+  // locally-run board ws://127.0.0.1:8080/ via `npm run serve:dev` in the ORP repo).
+  boards: ["wss://board.roshew.com/"],
   // A public STUN server lets two NATed peers find an srflx candidate. For
   // relay-only contacts you MUST add a TURN server with credentials.
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],

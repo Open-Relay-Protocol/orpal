@@ -8,7 +8,7 @@ import {
   OrpalClient,
   type DeviceIdentity,
 } from "@orpal/core";
-import type { DesktopSettings } from "@shared/ipc";
+import { DEFAULT_SETTINGS, type DesktopSettings } from "@shared/ipc";
 import {
   IpcConversationStore,
   IpcSecureKeyStore,
@@ -28,20 +28,27 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   // Load the identity from the OS keychain, or generate + persist one on first run.
   const { identity, created } = await IdentityManager.loadOrCreate(new IpcSecureKeyStore());
 
-  // The broker needs to call back into OrpalClient on (re)connect; OrpalClient
-  // needs the broker at construction. Resolve the cycle with a forward ref.
+  // Each board needs to call back into OrpalClient on (re)connect; OrpalClient
+  // needs the boards at construction. Resolve the cycle with a forward ref.
   let app: OrpalClient | undefined;
-  const broker = new BrowserRendezvousBroker(settings.boardUrl, {
-    WebSocketImpl: window.WebSocket,
-    onOpen: () => app?.onBrokerOpen(),
-    onClose: (info) => app?.onBrokerClose(`code=${info.code}${info.reason ? ` ${info.reason}` : ""}`),
-    onError: () => app?.onBrokerError("socket error"),
-  });
+  // Defensive: tolerate older/partial settings that predate the multi-board field.
+  const boardUrls =
+    settings.boards && settings.boards.length ? settings.boards : DEFAULT_SETTINGS.boards;
+  const boards = boardUrls.map((url) => ({
+    id: url,
+    broker: new BrowserRendezvousBroker(url, {
+      WebSocketImpl: window.WebSocket,
+      onOpen: () => app?.onBrokerOpen(url),
+      onClose: (info) =>
+        app?.onBrokerClose(url, `code=${info.code}${info.reason ? ` ${info.reason}` : ""}`),
+      onError: () => app?.onBrokerError(url, "socket error"),
+    }),
+  }));
 
   const orpal = new OrpalClient({
     identity,
     store: new IpcConversationStore(),
-    broker,
+    boards,
     iceServers: settings.iceServers,
     relayOnlyByDefault: settings.relayOnlyByDefault,
     createFileSink: (offer) => createIncomingFileSink(offer),

@@ -14,6 +14,7 @@ export function Conversation() {
     sendFile,
     connect,
     setRelayOnly,
+    brokerState,
   } = useOrpal();
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -26,7 +27,10 @@ export function Conversation() {
     return (
       <main className="conversation empty">
         <div className="center muted">
-          <CrabMascot className="empty-mascot" />
+          <CrabMascot
+            className="empty-mascot"
+            status={brokerState === "open" ? "secure" : brokerState === "connecting" ? "connecting" : "down"}
+          />
           <p>Select a contact to start messaging.</p>
           <p className="hint">
             Messages and files travel peer-to-peer over WebRTC. The board only helps you find each

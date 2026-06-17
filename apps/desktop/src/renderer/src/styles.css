@@ -387,11 +387,43 @@ textarea.mono,
   font-size: 12.5px;
 }
 .empty-mascot {
-  width: 168px;
+  width: 188px;
   height: auto;
   margin: 0 auto 14px;
   display: block;
-  filter: drop-shadow(0 6px 14px rgba(20, 60, 140, 0.45));
+  filter: drop-shadow(0 8px 16px rgba(10, 30, 70, 0.5));
+}
+
+/* crab idle animation: dangling legs, swaying claws, a connecting pulse */
+@keyframes crab-dangle {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+@keyframes crab-claw {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(4deg); }
+}
+@keyframes crab-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.crab-leg {
+  transform-box: view-box;
+  animation: crab-dangle 2.6s ease-in-out infinite;
+}
+.crab-claw {
+  transform-box: view-box;
+  animation: crab-claw 2.4s ease-in-out infinite;
+}
+.crab-connecting {
+  animation: crab-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .crab-leg,
+  .crab-claw,
+  .crab-connecting {
+    animation: none;
+  }
 }
 .error-mascot {
   width: 120px;
@@ -611,6 +643,20 @@ textarea.mono,
   margin-top: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.board-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.board-remove {
+  flex: none;
+  padding: 7px 10px;
+}
+.add-board {
+  align-self: flex-start;
+  font-size: 12px;
+  padding: 5px 10px;
 }
 .checkbox-row {
   display: flex;

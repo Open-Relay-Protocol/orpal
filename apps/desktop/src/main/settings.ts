@@ -15,7 +15,14 @@ export class SettingsStore {
   async get(): Promise<DesktopSettings> {
     try {
       const raw = await readFile(this.file, "utf8");
-      return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<DesktopSettings>) };
+      const parsed = JSON.parse(raw) as Partial<DesktopSettings> & { boardUrl?: string };
+      // Migrate the pre-multi-board single `boardUrl` field.
+      if (!parsed.boards && parsed.boardUrl) parsed.boards = [parsed.boardUrl];
+      const merged = { ...DEFAULT_SETTINGS, ...parsed };
+      if (!Array.isArray(merged.boards) || merged.boards.length === 0) {
+        merged.boards = [...DEFAULT_SETTINGS.boards];
+      }
+      return merged;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }

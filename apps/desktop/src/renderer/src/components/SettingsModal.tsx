@@ -5,13 +5,25 @@ import type { IceServer } from "@shared/ipc";
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { settings, saveSettings, settingsNeedRestart } = useOrpal();
-  const [boardUrl, setBoardUrl] = useState(settings.boardUrl);
+  const [boards, setBoards] = useState<string[]>(
+    settings.boards.length ? [...settings.boards] : [""],
+  );
   const [iceJson, setIceJson] = useState(JSON.stringify(settings.iceServers, null, 2));
   const [relayDefault, setRelayDefault] = useState(settings.relayOnlyByDefault);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  const setBoard = (i: number, v: string) =>
+    setBoards((b) => b.map((x, idx) => (idx === i ? v : x)));
+  const addBoard = () => setBoards((b) => [...b, ""]);
+  const removeBoard = (i: number) => setBoards((b) => b.filter((_, idx) => idx !== i));
+
   const save = async () => {
+    const cleaned = boards.map((b) => b.trim()).filter(Boolean);
+    if (cleaned.length === 0) {
+      setError("Add at least one board URL (ws:// or wss://).");
+      return;
+    }
     let iceServers: IceServer[];
     try {
       iceServers = JSON.parse(iceJson);
@@ -21,19 +33,42 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       return;
     }
     setError(null);
-    await saveSettings({ boardUrl: boardUrl.trim(), iceServers, relayOnlyByDefault: relayDefault });
+    await saveSettings({ boards: cleaned, iceServers, relayOnlyByDefault: relayDefault });
     setSaved(true);
   };
 
   return (
     <Modal title="Settings" onClose={onClose}>
-      <label className="field-label">Board URL (wss:// or ws://)</label>
-      <input value={boardUrl} onChange={(e) => setBoardUrl(e.target.value)} placeholder="ws://127.0.0.1:8080/" />
+      <label className="field-label">Boards (ws:// or wss://) — federated</label>
+      {boards.map((url, i) => (
+        <div className="board-row" key={i}>
+          <input
+            value={url}
+            onChange={(e) => setBoard(i, e.target.value)}
+            placeholder="wss://board.example.com/"
+          />
+          <button
+            className="ghost board-remove"
+            onClick={() => removeBoard(i)}
+            disabled={boards.length === 1}
+            title="Remove board"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button className="ghost add-board" onClick={addBoard}>
+        + Add board
+      </button>
+      <p className="muted">
+        Your device announces presence on every board and reaches a contact via whichever board
+        you’re both on. The first board to make a working connection wins.
+      </p>
 
       <label className="field-label">ICE servers (STUN/TURN) — JSON</label>
       <textarea
         className="card-input mono"
-        rows={7}
+        rows={6}
         value={iceJson}
         onChange={(e) => setIceJson(e.target.value)}
       />
