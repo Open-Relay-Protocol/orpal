@@ -20,9 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Capacitor 8's CLI requires Node >= 22 (`cap sync` aborts on Node 20).
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # Capacitor 8's Android toolchain (AGP 8.7 / Gradle 8.14) requires JDK 21.
