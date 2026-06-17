@@ -15,9 +15,9 @@
     "build:core": "npm run build --workspace @orpal/core",
     "test": "npm run test --workspace @orpal/core",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "dev:desktop": "npm run dev --workspace @orpal/desktop",
-    "build:desktop": "npm run build --workspace @orpal/desktop",
-    "dist:desktop": "npm run dist --workspace @orpal/desktop"
+    "dev:desktop": "npm run dev --workspace orpal-desktop",
+    "build:desktop": "npm run build --workspace orpal-desktop",
+    "dist:desktop": "npm run dist --workspace orpal-desktop"
   },
   "license": "Apache-2.0"
 }

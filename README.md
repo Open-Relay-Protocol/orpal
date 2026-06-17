@@ -147,7 +147,7 @@ otherwise — so packaging never fails on the native module.
 History uses **better-sqlite3** when it builds for your Node/Electron ABI, and
 transparently falls back to a JSON file store otherwise (it's an *optional*
 dependency, so install never fails). To force the native build for Electron:
-`npm run rebuild --workspace @orpal/desktop`.
+`npm run rebuild --workspace orpal-desktop`.
 
 ## Tests
 
