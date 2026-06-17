@@ -116,11 +116,11 @@ artifact (`orpal-linux`). On your Ubuntu box:
 ```bash
 # AppImage (portable; needs FUSE):
 sudo apt install -y libfuse2
-chmod +x Orpal-*.AppImage
-./Orpal-*.AppImage
+chmod +x Orpal-*-x64.AppImage
+./Orpal-*-x64.AppImage
 
 # or the .deb:
-sudo apt install ./orpal_*_amd64.deb     # installs "Orpal" to your apps menu
+sudo apt install ./Orpal-*-x64.deb       # installs "Orpal" to your apps menu
 ```
 
 Tag a release (`git tag v0.1.0 && git push --tags`) to also attach the installers
