@@ -12,6 +12,8 @@ function deliveryGlyph(state: StoredMessage["state"]): { glyph: string; cls: str
   switch (state) {
     case "sending":
       return { glyph: "•", cls: "sending", label: "Sending…" };
+    case "queued":
+      return { glyph: "🕓", cls: "queued", label: "Saved on this device — will send when they’re online" };
     case "delivered":
       return { glyph: "✓✓", cls: "delivered", label: "Delivered (ACK)" };
     case "failed":

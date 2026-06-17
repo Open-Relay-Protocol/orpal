@@ -539,6 +539,7 @@ textarea.mono,
 }
 .delivery.delivered { color: var(--lcd); text-shadow: 0 0 4px rgba(79, 160, 255, 0.6); }
 .delivery.sending { color: var(--warn); }
+.delivery.queued { color: var(--muted); }
 .delivery.failed { color: var(--err); font-weight: 700; }
 .retry {
   padding: 1px 8px;

@@ -68,16 +68,21 @@ The same codebase ships two ways from one shared, framework-agnostic core:
   validation (anti-substitution).
 - **Reliable messaging** — contact list, 1:1 conversations, and per-message
   delivery state (sending → **delivered** via the §11 one-time-key ACK, or
-  **failed/retry** on `DeliveryTimeoutError`). History is persisted locally in the
-  browser (**IndexedDB**).
+  **queued** for store-and-forward when the contact is offline). History is
+  persisted locally in the browser (**IndexedDB**).
 - **File transfer** — chunked, header-framed (id, name, size, mime, chunk
   index/total, per-file SHA-256), ACK-gated **backpressure** with a sliding window,
   app-level idempotency, and **reassembly + integrity verification**. Sending
   streams straight off the source file; an incoming file reassembles in memory and
   is then offered as a **download** (the web has no unprompted streaming-to-disk).
-- **Honest offline UX** — no store-and-forward: a contact shows offline when a
-  match can't be made, undeliverable messages are marked failed, and rendezvous is
-  re-initiated automatically on broker reconnect.
+- **Local store-and-forward** — the *board* still stores nothing (it's blind and
+  RAM-only — SPEC §0/§9.1), but Orpal does. When a contact is offline, outbound
+  messages are **queued on your device** instead of dropped; a background retry loop
+  re-initiates rendezvous until the contact reappears, then the local outbox is
+  flushed in order and each message flips to **delivered** only once its §11 ACK
+  comes back. The queue is rebuilt from local history on restart, so it survives a
+  reload. (Set `storeAndForward: false` for the legacy honest-offline behavior where
+  undeliverable messages are marked failed for manual retry.)
 
 ## Platforms
 
@@ -281,8 +286,11 @@ The suites cover:
 - **`file-transfer`** — chunking/reassembly byte-for-byte, out-of-order + duplicate
   idempotency, SHA-256 integrity (incl. tamper detection), zero-byte files, and a
   full end-to-end transfer between two `OrpalClient`s.
-- **`delivery-failure`** — offline contact → failed; ACK timeout →
-  `DeliveryTimeoutError` → failed; retry-after-reachable succeeds.
+- **`delivery-failure`** — with store-and-forward **off**: offline contact → failed,
+  ACK timeout → `DeliveryTimeoutError` → failed, retry-after-reachable succeeds. With
+  store-and-forward **on** (the default): offline send → queued → auto-forwarded
+  in order (exactly once) when the contact returns, and the outbox is rebuilt from
+  local history on restart.
 - **`integration-board`** *(opt-in)* — the same round-trip through the **real**
   reference board over real WebSockets. Run with a board up:
   `ORP_BOARD_URL=ws://127.0.0.1:8080/ npx vitest run test/integration-board.test.ts`

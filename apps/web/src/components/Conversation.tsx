@@ -81,8 +81,8 @@ export function Conversation() {
 
       {state === "down" && (
         <div className="offline-banner">
-          This contact appears offline. Orpal has no store-and-forward, so messages can’t be
-          delivered until they’re online — they’ll be marked failed and you can retry.
+          This contact appears offline. The blind board still stores nothing — but messages you send
+          are saved on this device and delivered automatically the moment they’re back online.
         </div>
       )}
 

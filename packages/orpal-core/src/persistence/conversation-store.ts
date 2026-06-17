@@ -1,18 +1,22 @@
 // Local conversation persistence abstraction.
 //
-// The protocol stores NOTHING (no store-and-forward; the board is RAM-only and
-// blind — SPEC §0/§9.1), so durable history is entirely the app's job. orpal-core
-// defines the interface; a shell supplies the implementation (web: IndexedDB;
-// Android: a Capacitor SQLite plugin). Keeping it behind this
-// interface lets both shells — and the tests — reuse the messaging layer.
+// The PROTOCOL stores nothing (no server-side store-and-forward; the board is
+// RAM-only and blind — SPEC §0/§9.1). Durable history is therefore entirely the
+// app's job, and so is *local* store-and-forward: when a contact is offline,
+// outbound messages are queued in this store on THIS device and re-sent when the
+// contact next comes online (see OrpalClient). orpal-core defines the interface; a
+// shell supplies the implementation (web: IndexedDB; Android: a Capacitor SQLite
+// plugin). Keeping it behind this interface lets both shells — and the tests —
+// reuse the messaging layer.
 
 import type { Contact } from "../contacts/contact.js";
 
 /** Lifecycle of an OUTBOUND message, driven by the §11 ACK layer. */
 export type OutboundState =
   | "sending" // in the ReliableChannel pending queue, awaiting ACK
+  | "queued" // contact offline — stored locally, will auto-forward when they return
   | "delivered" // a valid one-time-key ACK came back (SPEC §11)
-  | "failed"; // DeliveryTimeoutError — no ACK in time; caller may retry
+  | "failed"; // undeliverable with store-and-forward off; caller may retry
 
 /** Lifecycle of a FILE transfer (either direction). */
 export type TransferState =
