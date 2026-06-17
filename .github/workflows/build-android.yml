@@ -1,0 +1,76 @@
+name: build-android
+
+# Builds an installable Android APK on a real Linux runner with the Android SDK.
+# The native shell (apps/android) is a Capacitor wrapper that bundles the already
+# built web (PWA) renderer — the same React UI + orpal-core — so the only build
+# inputs are the web bundle (`npm run build:web`) and the committed Gradle project.
+# The signed-debug APK is uploaded as a workflow artifact you can download from the
+# Actions tab and sideload onto a device (and attached to a GitHub Release when you
+# push a v* tag).
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Capacitor 8's Android toolchain (AGP 8.7 / Gradle 8.14) requires JDK 21.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      # variables.gradle pins compileSdk/targetSdk = 36, so make sure those SDK
+      # packages are present (the hosted image doesn't always ship the newest).
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      # build:web also builds @orpal/core (see root package.json); it emits
+      # apps/web/dist, which Capacitor bundles into the APK.
+      - name: Build web bundle (the APK's bundled renderer)
+        run: npm run build:web
+
+      # Copy the fresh web assets + regenerate the native config (both gitignored).
+      - name: Sync web assets into the native project
+        working-directory: apps/android
+        run: npx cap sync android
+
+      - name: Assemble debug APK
+        working-directory: apps/android/android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Collect APK
+        working-directory: apps/android/android
+        run: |
+          mkdir -p ../out
+          cp app/build/outputs/apk/debug/app-debug.apk ../out/Orpal-debug.apk
+          ls -la ../out
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: orpal-android
+          path: apps/android/out/Orpal-debug.apk
+          if-no-files-found: error
+
+      - name: Attach to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/android/out/Orpal-debug.apk
