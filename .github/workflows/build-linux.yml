@@ -1,0 +1,57 @@
+name: build-linux
+
+# Builds installable Ubuntu/Linux packages (AppImage + .deb) on a real Linux
+# runner — electron-builder can't reliably cross-build Linux from macOS. The
+# installers are uploaded as workflow artifacts you can download from the Actions
+# tab (and attached to a GitHub Release when you push a v* tag).
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test core
+        run: npm test
+
+      - name: Build shared core
+        run: npm run build:core
+
+      - name: Build desktop bundles
+        working-directory: apps/desktop
+        run: npx electron-vite build
+
+      - name: Package AppImage + .deb
+        working-directory: apps/desktop
+        run: npx electron-builder --linux --publish never
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: orpal-linux
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+          if-no-files-found: error
+
+      - name: Attach to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb

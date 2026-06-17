@@ -103,18 +103,44 @@ default); for relay-only contacts add a TURN server in Settings. To run your own
 board instead, set Settings → Board URL to `ws://127.0.0.1:8080/` and run the ORP
 reference (`npm run serve:dev` in a clone of github.com/Prograde-Solutions/orp).
 
-### Packaging (incl. Linux)
+### Install on Ubuntu / Linux
+
+electron-builder does **not** cross-compile Linux from macOS, so there are two
+ways to get an installable package:
+
+**Option A — download a prebuilt installer from CI (no build needed).**
+Pushes to `master` run `.github/workflows/build-linux.yml` on `ubuntu-latest`,
+which produces an **AppImage** and a **.deb** and uploads them as a workflow
+artifact (`orpal-linux`). On your Ubuntu box:
 
 ```bash
-npm run dist:desktop   # build + electron-builder for the HOST OS
+# AppImage (portable; needs FUSE):
+sudo apt install -y libfuse2
+chmod +x Orpal-*.AppImage
+./Orpal-*.AppImage
+
+# or the .deb:
+sudo apt install ./orpal_*_amd64.deb     # installs "Orpal" to your apps menu
 ```
 
-Run this **on the target OS** (electron-builder does not cross-compile here):
-- **Linux** → AppImage + `.deb` (configured in `apps/desktop/electron-builder.yml`)
-- **macOS** → dmg + zip · **Windows** → NSIS installer
+Tag a release (`git tag v0.1.0 && git push --tags`) to also attach the installers
+to a GitHub Release.
 
-On Linux, `better-sqlite3` typically compiles fine (used for history); if it
-doesn't, the app silently falls back to a JSON file store, so packaging never fails.
+**Option B — build it yourself on the Ubuntu machine:**
+
+```bash
+git clone https://github.com/ben-is-jammin/orpal && cd orpal
+npm install
+npm run build:core
+npm run dist:desktop          # → apps/desktop/release/*.AppImage and *.deb
+```
+
+`npm run dist:desktop` builds + runs electron-builder for the **host OS**, so it
+also produces dmg/zip on macOS and an NSIS installer on Windows.
+
+History uses **better-sqlite3** when it builds for the target ABI (it does on a
+normal Ubuntu Node toolchain) and transparently falls back to a JSON file store
+otherwise — so packaging never fails on the native module.
 
 ### SQLite note
 

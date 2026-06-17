@@ -14,13 +14,11 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "dist": "electron-vite build && electron-builder"
   },
-  "dependencies": {
-    "@orpal/core": "*"
-  },
   "optionalDependencies": {
     "better-sqlite3": "^11.7.0"
   },
   "devDependencies": {
+    "@orpal/core": "*",
     "@electron/rebuild": "^3.7.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/qrcode": "^1.5.5",
