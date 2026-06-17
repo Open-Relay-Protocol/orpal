@@ -1,0 +1,14 @@
+Open Relay Protocol (ORP)
+Copyright 2026 Justin Avant and Benjamin Hewlett
+
+This product is multi-licensed by component; see LICENSING.md for the exact
+per-path boundary.
+
+  - Apache-2.0 ............ core/, client/, tests/, SPEC.md, README.md, build config
+  - AGPL-3.0-or-later ..... board/  (the reference rendezvous broker)
+
+Each source file carries an authoritative SPDX-License-Identifier header.
+
+Third-party components retain their own licenses. Runtime cryptography is provided
+by the @noble libraries (@noble/curves, @noble/ciphers, @noble/hashes), which are
+MIT-licensed.

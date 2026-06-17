@@ -1,0 +1,82 @@
+// Adapters that satisfy orpal-core's runtime-agnostic interfaces using the
+// Electron IPC bridge (window.orpal). This is the seam where the framework-
+// agnostic core meets the desktop shell's privileged main-process services.
+
+import type {
+  ConversationStore,
+  Contact,
+  FileOfferFrame,
+  FileSink,
+  FileSource,
+  IncomingFileSink,
+  ListMessagesOptions,
+  SecureKeyStore,
+  StoredKeys,
+  StoredMessage,
+} from "@orpal/core";
+import type { FilePick, MessagePatch } from "@shared/ipc";
+
+/** Private keys via the OS keychain (Electron safeStorage in main). */
+export class IpcSecureKeyStore implements SecureKeyStore {
+  load(): Promise<StoredKeys | null> {
+    return window.orpal.keys.load();
+  }
+  save(keys: StoredKeys): Promise<void> {
+    return window.orpal.keys.save(keys);
+  }
+  clear(): Promise<void> {
+    return window.orpal.keys.clear();
+  }
+}
+
+/** Conversation history via SQLite in main. */
+export class IpcConversationStore implements ConversationStore {
+  init(): Promise<void> {
+    return window.orpal.store.init();
+  }
+  upsertContact(contact: Contact): Promise<void> {
+    return window.orpal.store.upsertContact(contact);
+  }
+  listContacts(): Promise<Contact[]> {
+    return window.orpal.store.listContacts();
+  }
+  getContact(identityKey: string): Promise<Contact | null> {
+    return window.orpal.store.getContact(identityKey);
+  }
+  removeContact(identityKey: string): Promise<void> {
+    return window.orpal.store.removeContact(identityKey);
+  }
+  appendMessage(message: StoredMessage): Promise<void> {
+    return window.orpal.store.appendMessage(message);
+  }
+  updateMessage(id: string, patch: MessagePatch): Promise<void> {
+    return window.orpal.store.updateMessage(id, patch);
+  }
+  listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]> {
+    return window.orpal.store.listMessages(contactKey, opts);
+  }
+}
+
+/** A FileSource that streams chunks off disk via main (sender side). */
+export async function makeFileSource(pick: FilePick): Promise<FileSource> {
+  const handle = await window.orpal.files.openRead(pick.path);
+  return {
+    name: handle.name,
+    size: handle.size,
+    mime: handle.mime,
+    readChunk: (offset, length) => window.orpal.files.readChunk(handle.handleId, offset, length),
+    sha256: () => window.orpal.files.hash(handle.handleId),
+    close: () => window.orpal.files.closeRead(handle.handleId),
+  };
+}
+
+/** Create the sink an incoming file streams into (receiver side). */
+export async function createIncomingFileSink(offer: FileOfferFrame): Promise<IncomingFileSink> {
+  const handle = await window.orpal.files.openWrite(offer.name);
+  const sink: FileSink = {
+    writeChunk: (offset, data) => window.orpal.files.writeChunk(handle.handleId, offset, data),
+    finalize: () => window.orpal.files.finalizeWrite(handle.handleId),
+    abort: () => window.orpal.files.abortWrite(handle.handleId),
+  };
+  return { sink, path: handle.path };
+}

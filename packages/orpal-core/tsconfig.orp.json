@@ -1,0 +1,31 @@
+{
+  "//": "Vendor-compile of the ORP reference. We compile ONLY core/ plus the four",
+  "//2": "client/ files Orpal builds on (Client, ReliableChannel, SecureChannel, the",
+  "//3": "WebRTC interface + MockWebRTC). The AGPL board/, the Node-only ws broker,",
+  "//4": "and the werift adapter are deliberately excluded so they can never reach the",
+  "//5": "shipped client. Output is consumed as built .js + .d.ts (skipLibCheck), so",
+  "//6": "the reference is type-checked under ITS OWN settings, not Orpal's stricter",
+  "//7": "ones. @noble is reused transitively (no second crypto stack).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "sourceMap": false,
+    "outDir": "vendor/orp",
+    "rootDir": "../../orp-ref",
+    "types": ["node"]
+  },
+  "include": [
+    "../../orp-ref/core/**/*.ts",
+    "../../orp-ref/client/client.ts",
+    "../../orp-ref/client/reliablechannel.ts",
+    "../../orp-ref/client/securechannel.ts",
+    "../../orp-ref/client/webrtc.ts"
+  ]
+}

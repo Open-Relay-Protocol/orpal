@@ -1,0 +1,123 @@
+// Contacts and contact cards.
+//
+// A device's address is its Ed25519 identity key (SPEC §2 — the only required
+// identifier). A contact CARD additionally carries the X25519 transport key and
+// its signed binding so the importer can pin and verify them out-of-band. The
+// transport key is deliberately NOT broadcast in presence/intent (§2,
+// anti-harvesting); sharing it face-to-face via a QR code / paste is the intended
+// channel. On import we ALWAYS verify the binding and that it ties this identity
+// key to this transport key — the same check a peer runs before sealing (§2.1).
+
+import { verifyBinding } from "../orp.js";
+import type { KeyBinding, PublicIdentity } from "../orp.js";
+
+export interface Contact {
+  /** b64u Ed25519 identity public key — the routing address. */
+  identityKey: string;
+  /** b64u X25519 transport public key (bound to identityKey). */
+  transportKey: string;
+  binding: KeyBinding;
+  displayName: string;
+  /** Privacy-sensitive contact: use relay-only ICE (SPEC §6) so the peer never
+   *  learns this device's IP. Requires a configured TURN server. */
+  relayOnly: boolean;
+  addedUtc: string;
+}
+
+/** The serializable card encoded into a QR / pasted between devices. */
+export interface ContactCard {
+  v: 1;
+  kind: "orpal-contact";
+  identity_key: string;
+  transport_key: string;
+  binding: KeyBinding;
+  name?: string;
+}
+
+export interface ParsedCard {
+  valid: boolean;
+  reason?: string;
+  card?: ContactCard;
+}
+
+/** Build a shareable card from this device's own public identity. */
+export function serializeContactCard(pub: PublicIdentity, name?: string): string {
+  const card: ContactCard = {
+    v: 1,
+    kind: "orpal-contact",
+    identity_key: pub.identity_key,
+    transport_key: pub.transport_key,
+    binding: pub.binding,
+    name,
+  };
+  return JSON.stringify(card);
+}
+
+/**
+ * Parse and FULLY VALIDATE a scanned/pasted contact card. Returns
+ * `{ valid:false, reason }` rather than throwing so the UI can show a clear
+ * error. A card only validates if its binding is a correct self-signature AND it
+ * ties the advertised identity key to the advertised transport key — this is the
+ * anti-substitution guarantee: nobody can hand you a card pairing someone's
+ * identity with an attacker-chosen transport key.
+ */
+export function parseContactCard(input: string): ParsedCard {
+  let obj: unknown;
+  try {
+    obj = JSON.parse(input);
+  } catch {
+    return { valid: false, reason: "not-valid-json" };
+  }
+  if (typeof obj !== "object" || obj === null) {
+    return { valid: false, reason: "not-an-object" };
+  }
+  const o = obj as Record<string, unknown>;
+  if (o.kind !== "orpal-contact") return { valid: false, reason: "not-an-orpal-contact-card" };
+  if (
+    typeof o.identity_key !== "string" ||
+    typeof o.transport_key !== "string" ||
+    typeof o.binding !== "object" ||
+    o.binding === null
+  ) {
+    return { valid: false, reason: "missing-fields" };
+  }
+  const binding = o.binding as KeyBinding;
+  if (!verifyBinding(binding)) return { valid: false, reason: "bad-binding-signature" };
+  if (binding.identity_key !== o.identity_key) {
+    return { valid: false, reason: "binding-identity-mismatch" };
+  }
+  if (binding.transport_key !== o.transport_key) {
+    return { valid: false, reason: "binding-transport-mismatch" };
+  }
+  const card: ContactCard = {
+    v: 1,
+    kind: "orpal-contact",
+    identity_key: o.identity_key,
+    transport_key: o.transport_key,
+    binding,
+    name: typeof o.name === "string" ? o.name : undefined,
+  };
+  return { valid: true, card };
+}
+
+/** Turn a validated card into a Contact record for storage. */
+export function contactFromCard(
+  card: ContactCard,
+  opts: { displayName?: string; relayOnly?: boolean; now?: () => string } = {},
+): Contact {
+  return {
+    identityKey: card.identity_key,
+    transportKey: card.transport_key,
+    binding: card.binding,
+    displayName: opts.displayName ?? card.name ?? shortKey(card.identity_key),
+    relayOnly: opts.relayOnly ?? false,
+    addedUtc: (opts.now ?? (() => new Date().toISOString()))(),
+  };
+}
+
+/** A short, human-readable fingerprint of an identity key for default names. */
+export function shortKey(identityKey: string): string {
+  return identityKey.length <= 12
+    ? identityKey
+    : `${identityKey.slice(0, 6)}…${identityKey.slice(-4)}`;
+}

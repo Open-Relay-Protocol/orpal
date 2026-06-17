@@ -1,0 +1,40 @@
+{
+  "name": "@orpal/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-agnostic Orpal core: ORP broker + native WebRTC endpoint, identity, messaging and file-transfer over ReliableChannel, and local persistence abstractions. No UI, no Electron/Capacitor imports.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "vendor"
+  ],
+  "scripts": {
+    "vendor:orp": "tsc -p tsconfig.orp.json",
+    "prebuild": "npm run vendor:orp",
+    "build": "tsc -p tsconfig.json",
+    "pretypecheck": "npm run vendor:orp",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "npm run vendor:orp",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@noble/ciphers": "1.2.1",
+    "@noble/curves": "1.8.1",
+    "@noble/hashes": "1.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.6"
+  },
+  "license": "Apache-2.0"
+}

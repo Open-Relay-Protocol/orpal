@@ -1,0 +1,26 @@
+appId: com.prograde.orpal
+productName: Orpal
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+# better-sqlite3 is a native module: ship its prebuilt binary and rebuild for the
+# target Electron ABI at packaging time.
+npmRebuild: true
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+mac:
+  category: public.app-category.social-networking
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Network

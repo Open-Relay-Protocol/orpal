@@ -1,0 +1,23 @@
+{
+  "name": "orpal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orpal — a cross-platform messaging & file-transfer app on top of the Open Relay Protocol (ORP). This repo holds the shared core and the Electron desktop shell.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:core": "npm run build --workspace @orpal/core",
+    "test": "npm run test --workspace @orpal/core",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:desktop": "npm run dev --workspace @orpal/desktop",
+    "build:desktop": "npm run build --workspace @orpal/desktop",
+    "dist:desktop": "npm run dist --workspace @orpal/desktop"
+  },
+  "license": "Apache-2.0"
+}
