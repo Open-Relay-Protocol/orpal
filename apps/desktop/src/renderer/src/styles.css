@@ -1,27 +1,28 @@
 /* =========================================================================
-   Orpal — "Winamp Classic" skin. A nod to the 2.x era: gunmetal bevels, a
-   black-and-neon-green LCD, a spectrum analyzer, and a scrolling track ticker.
-   Purely cosmetic — every class the components use is preserved.
+   Orpal — "Winamp Classic" skin in ORP cobalt blue (logo + crab mascot brand).
+   Gunmetal bevels, a black-and-blue LCD, a spectrum analyzer, and a scrolling
+   track ticker. Purely cosmetic — every class the components use is preserved.
    ========================================================================= */
 :root {
   --metal-hi: #6e7484;
   --metal: #3a3e4b;
-  --metal-lo: #1b1d26;
-  --panel: #2b2e39;
-  --panel-2: #232631;
-  --lcd-bg: #04140a;
-  --lcd: #21e000;
-  --lcd-dim: #109016;
-  --amber: #ffcf3a;
-  --title-1: #46568a;
-  --title-2: #232a3d;
-  --text: #c9cedb;
-  --muted: #7d8497;
-  --ok: #21e000;
+  --metal-lo: #161a24;
+  --panel: #283044;
+  --panel-2: #1f2636;
+  --lcd-bg: #03101f;
+  --lcd: #4fa0ff;
+  --lcd-dim: #1f5bbf;
+  --eq-tip: #cfe6ff;
+  --ok: #46d6ff;
   --warn: #ffcf3a;
   --err: #ff5a48;
   --relay: #c79bff;
-  --sel-1: #2a47860;
+  --brand: #2f7be6;
+  --brand-deep: #163f86;
+  --title-1: #2f6fe0;
+  --title-2: #15356f;
+  --text: #cdd5e4;
+  --muted: #7e879d;
 }
 
 * {
@@ -36,7 +37,7 @@ body,
 }
 
 body {
-  background: linear-gradient(#23262f, #16181f);
+  background: linear-gradient(#1f2433, #131722);
   color: var(--text);
   font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -61,10 +62,10 @@ body {
 button {
   font: inherit;
   color: #e7ebf3;
-  background: linear-gradient(#4b505f, #2f333d);
+  background: linear-gradient(#4b5161, #2e3340);
   border: 1px solid var(--metal-lo);
   border-top-color: var(--metal-hi);
-  border-left-color: #565c6c;
+  border-left-color: #565d70;
   border-radius: 3px;
   padding: 7px 11px;
   cursor: pointer;
@@ -72,10 +73,10 @@ button {
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 button:hover {
-  background: linear-gradient(#565c6c, #383d49);
+  background: linear-gradient(#565d70, #383e4c);
 }
 button:active {
-  background: linear-gradient(#2a2d36, #3a3f4b);
+  background: linear-gradient(#262a35, #383e4c);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 button:disabled {
@@ -83,13 +84,12 @@ button:disabled {
   cursor: default;
 }
 button.ghost {
-  background: linear-gradient(#34384400, #2a2d3600);
-  background-color: #2b2e39;
-  border-color: #15171f;
-  border-top-color: #50566600;
+  background-color: #283044;
+  border-color: #141823;
+  border-top-color: #283044;
 }
 button.ghost:hover {
-  background-color: #353947;
+  background-color: #33405c;
 }
 
 input,
@@ -102,12 +102,12 @@ textarea {
   padding: 8px 10px;
   width: 100%;
   resize: none;
-  box-shadow: inset 0 0 0 1px #0c2a14, inset 0 1px 6px rgba(0, 0, 0, 0.7);
-  text-shadow: 0 0 4px rgba(33, 224, 0, 0.4);
+  box-shadow: inset 0 0 0 1px #0c2546, inset 0 1px 6px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 0 4px rgba(79, 160, 255, 0.4);
 }
 input::placeholder,
 textarea::placeholder {
-  color: #2c7a36;
+  color: #2c5aa0;
 }
 textarea.mono,
 .mono {
@@ -130,10 +130,10 @@ textarea.mono,
   height: 12px;
 }
 ::-webkit-scrollbar-track {
-  background: #14161d;
+  background: #11141d;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(#4b505f, #2f333d);
+  background: linear-gradient(#4b5161, #2e3340);
   border: 1px solid var(--metal-lo);
   border-radius: 2px;
 }
@@ -148,38 +148,48 @@ textarea.mono,
 .sidebar {
   background: linear-gradient(var(--panel), var(--panel-2));
   border-right: 2px solid var(--metal-lo);
-  box-shadow: inset -1px 0 0 #4a505f;
+  box-shadow: inset -1px 0 0 #45506a;
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-/* the classic Winamp titlebar gradient */
+/* the classic Winamp titlebar gradient, in ORP blue */
 .sidebar-head {
   padding: 10px 14px;
   background: linear-gradient(var(--title-1), var(--title-2));
   border-bottom: 1px solid var(--metal-lo);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 .brand-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.brand-logo {
+  height: 30px;
+  width: auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
 .brand {
   font-weight: 700;
-  font-size: 17px;
+  font-size: 16px;
   letter-spacing: 4px;
   text-transform: uppercase;
-  color: var(--lcd);
-  text-shadow: 0 0 7px rgba(33, 224, 0, 0.7), 0 1px 0 #000;
+  color: #eaf2ff;
+  text-shadow: 0 0 8px rgba(120, 180, 255, 0.55), 0 1px 0 #0b1f45;
 }
 .tagline {
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 10px;
   letter-spacing: 0.4px;
-  color: #9fb6d6;
-  opacity: 0.85;
+  color: #cfe0ff;
+  opacity: 0.9;
 }
 
 /* spectrum analyzer */
@@ -198,8 +208,8 @@ textarea.mono,
   display: block;
   width: 3px;
   height: 30%;
-  background: linear-gradient(to top, var(--lcd-dim), var(--lcd) 55%, var(--amber));
-  box-shadow: 0 0 3px rgba(33, 224, 0, 0.5);
+  background: linear-gradient(to top, var(--lcd-dim), var(--lcd) 55%, var(--eq-tip));
+  box-shadow: 0 0 3px rgba(79, 160, 255, 0.55);
   animation: eq 0.9s ease-in-out infinite;
 }
 .eq i:nth-child(1) { animation-duration: 0.7s; animation-delay: -0.2s; }
@@ -227,8 +237,8 @@ textarea.mono,
   display: flex;
   align-items: center;
   gap: 7px;
-  box-shadow: inset 0 0 0 1px #0c2a14, inset 0 1px 6px rgba(0, 0, 0, 0.7);
-  text-shadow: 0 0 4px rgba(33, 224, 0, 0.45);
+  box-shadow: inset 0 0 0 1px #0c2546, inset 0 1px 6px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 0 4px rgba(79, 160, 255, 0.45);
 }
 .broker .dot {
   width: 8px;
@@ -238,7 +248,7 @@ textarea.mono,
   box-shadow: 0 0 4px currentColor;
 }
 .broker-open .dot { background: var(--ok); }
-.broker-open { color: var(--lcd); }
+.broker-open { color: var(--ok); }
 .broker-connecting .dot { background: var(--warn); }
 .broker-connecting { color: var(--warn); animation: blink 1s steps(2) infinite; }
 .broker-closed .dot,
@@ -266,13 +276,13 @@ textarea.mono,
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  background: #06110b;
+  background: #050d1a;
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 .convo-empty {
   padding: 14px;
   font-size: 12px;
-  color: #2f8a3a;
+  color: #3f7fd0;
   font-family: ui-monospace, monospace;
 }
 .convo {
@@ -280,18 +290,18 @@ textarea.mono,
   text-align: left;
   background: transparent;
   border: none;
-  border-bottom: 1px solid #0c1f12;
+  border-bottom: 1px solid #0c1830;
   border-radius: 0;
   box-shadow: none;
   text-shadow: none;
   padding: 9px 14px;
 }
 .convo:hover {
-  background: #0b2014;
+  background: #0b1830;
 }
 .convo.active {
-  background: linear-gradient(#2c4a8e, #1c2f59);
-  box-shadow: inset 0 0 0 1px #4a6bb0;
+  background: linear-gradient(#2c52a0, #1b3168);
+  box-shadow: inset 0 0 0 1px #5b87d8;
 }
 .convo-row {
   display: flex;
@@ -302,11 +312,11 @@ textarea.mono,
   font-weight: 600;
   font-size: 12px;
   color: var(--lcd);
-  text-shadow: 0 0 4px rgba(33, 224, 0, 0.35);
+  text-shadow: 0 0 4px rgba(79, 160, 255, 0.35);
 }
 .convo.active .convo-name {
   color: #fff;
-  text-shadow: 0 0 5px rgba(120, 180, 255, 0.6);
+  text-shadow: 0 0 5px rgba(150, 195, 255, 0.7);
 }
 .convo-sub {
   display: flex;
@@ -315,10 +325,10 @@ textarea.mono,
   font-size: 11px;
 }
 .convo-key {
-  color: #2f8a3a;
+  color: #3f7fd0;
 }
 .convo.active .convo-key {
-  color: #bcd0f5;
+  color: #cfddf8;
 }
 
 .badge {
@@ -335,25 +345,38 @@ textarea.mono,
 }
 
 .presence { font-size: 11px; }
-.presence-connected { color: var(--lcd); }
+.presence-connected { color: var(--ok); }
 .presence-connecting { color: var(--warn); }
 .presence-down { color: var(--err); }
 .presence-unknown { color: var(--muted); }
-.convo.active .presence-unknown { color: #bcd0f5; }
+.convo.active .presence-unknown { color: #cfddf8; }
 
 /* ---- conversation ---- */
 .conversation {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: linear-gradient(#1c1f27, #15171d);
+  background: linear-gradient(#1a1f2c, #131722);
 }
 .conversation.empty {
   justify-content: center;
 }
 .conversation .hint {
-  max-width: 440px;
+  max-width: 460px;
   font-size: 12.5px;
+}
+.empty-mascot {
+  width: 168px;
+  height: auto;
+  margin: 0 auto 14px;
+  display: block;
+  filter: drop-shadow(0 6px 14px rgba(20, 60, 140, 0.45));
+}
+.error-mascot {
+  width: 120px;
+  height: auto;
+  margin: 0 auto 12px;
+  display: block;
 }
 .convo-header {
   display: flex;
@@ -363,7 +386,7 @@ textarea.mono,
   padding: 8px 14px;
   background: linear-gradient(var(--title-1), var(--title-2));
   border-bottom: 1px solid var(--metal-lo);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 .convo-title {
   display: flex;
@@ -385,8 +408,8 @@ textarea.mono,
   padding: 3px 8px;
   font-size: 13px;
   letter-spacing: 0.5px;
-  box-shadow: inset 0 0 0 1px #0c2a14, inset 0 1px 5px rgba(0, 0, 0, 0.7);
-  text-shadow: 0 0 5px rgba(33, 224, 0, 0.55);
+  box-shadow: inset 0 0 0 1px #0c2546, inset 0 1px 5px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 0 5px rgba(79, 160, 255, 0.55);
 }
 .marquee > span {
   display: inline-block;
@@ -435,22 +458,22 @@ textarea.mono,
   max-width: 70%;
   padding: 8px 11px;
   border-radius: 5px;
-  background: linear-gradient(#3a3e4b, #2c2f3a);
+  background: linear-gradient(#363b49, #292d38);
   border: 1px solid var(--metal-lo);
-  border-top-color: #565c6c;
+  border-top-color: #565d70;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .bubble.out {
-  background: linear-gradient(#15401f, #0e2c15);
-  border-color: #061a0c;
-  border-top-color: #1f6b30;
+  background: linear-gradient(#15366e, #0d2450);
+  border-color: #06173a;
+  border-top-color: #2f6fe0;
 }
 .bubble-text {
   white-space: pre-wrap;
   word-break: break-word;
 }
 .bubble.out .bubble-text {
-  color: #b8f5c4;
+  color: #cfe0ff;
 }
 .bubble-meta {
   display: flex;
@@ -461,7 +484,7 @@ textarea.mono,
   font-size: 10px;
   color: var(--muted);
 }
-.delivery.delivered { color: var(--lcd); text-shadow: 0 0 4px rgba(33, 224, 0, 0.5); }
+.delivery.delivered { color: var(--lcd); text-shadow: 0 0 4px rgba(79, 160, 255, 0.6); }
 .delivery.sending { color: var(--warn); }
 .delivery.failed { color: var(--err); font-weight: 700; }
 .retry {
@@ -488,8 +511,8 @@ textarea.mono,
 /* segmented Winamp-style position bar */
 .progress-fill {
   height: 100%;
-  background: repeating-linear-gradient(90deg, var(--lcd) 0 4px, #0d2d16 4px 6px);
-  box-shadow: 0 0 6px rgba(33, 224, 0, 0.5);
+  background: repeating-linear-gradient(90deg, var(--lcd) 0 4px, #0c2550 4px 6px);
+  box-shadow: 0 0 6px rgba(79, 160, 255, 0.5);
   transition: width 0.2s;
 }
 .reveal {
@@ -506,7 +529,7 @@ textarea.mono,
   align-items: flex-end;
 }
 .composer textarea { flex: 1; max-height: 140px; }
-.attach { background: linear-gradient(#4b505f, #2f333d); }
+.attach { background: linear-gradient(#4b5161, #2e3340); }
 
 /* ---- modal = a little Winamp window ---- */
 .modal-backdrop {
@@ -540,12 +563,12 @@ textarea.mono,
   font-size: 13px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--lcd);
-  text-shadow: 0 0 5px rgba(33, 224, 0, 0.55);
+  color: #eaf2ff;
+  text-shadow: 0 0 6px rgba(120, 180, 255, 0.5);
   font-family: ui-monospace, monospace;
 }
 .modal-head .x {
-  background: linear-gradient(#4b505f, #2f333d);
+  background: linear-gradient(#4b5161, #2e3340);
   font-size: 14px;
   line-height: 1;
   padding: 2px 8px;
@@ -584,7 +607,7 @@ textarea.mono,
   font-size: 11px;
   word-break: break-all;
   color: var(--lcd);
-  text-shadow: 0 0 4px rgba(33, 224, 0, 0.4);
+  text-shadow: 0 0 4px rgba(79, 160, 255, 0.4);
   box-shadow: inset 0 1px 5px rgba(0, 0, 0, 0.7);
 }
 .qr-wrap {
@@ -597,10 +620,10 @@ textarea.mono,
   min-height: 200px;
 }
 .tabs { display: flex; gap: 6px; }
-.tab { background: linear-gradient(#3a3e4b, #2c2f3a); }
+.tab { background: linear-gradient(#363b49, #292d38); }
 .tab.active {
   background: linear-gradient(var(--title-1), var(--title-2));
-  color: var(--lcd);
+  color: #eaf2ff;
 }
 .scanner {
   width: 100%;
@@ -611,5 +634,5 @@ textarea.mono,
   border: 1px solid #000;
 }
 .error-text { color: #ffb0a8; font-size: 12.5px; }
-.info-text { color: var(--lcd); font-size: 12.5px; text-shadow: 0 0 4px rgba(33, 224, 0, 0.4); }
+.info-text { color: var(--lcd); font-size: 12.5px; text-shadow: 0 0 4px rgba(79, 160, 255, 0.4); }
 .error-box { max-width: 460px; }

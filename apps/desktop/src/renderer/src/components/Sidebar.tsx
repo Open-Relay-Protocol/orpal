@@ -1,5 +1,6 @@
 import { useOrpal } from "../state/orpal-context.js";
 import { shortKey } from "@orpal/core";
+import orpLogo from "@/assets/orp-logo.svg";
 
 const BROKER_LABEL: Record<string, string> = {
   connecting: "Connecting to board…",
@@ -19,7 +20,10 @@ export function Sidebar(props: {
     <aside className="sidebar">
       <header className="sidebar-head">
         <div className="brand-row">
-          <div className="brand">Orpal</div>
+          <div className="brand-mark">
+            <img className="brand-logo" src={orpLogo} alt="ORP" />
+            <div className="brand">Orpal</div>
+          </div>
           <div className="eq" aria-hidden="true">
             <i />
             <i />

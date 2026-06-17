@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { shortKey } from "@orpal/core";
 import { useOrpal } from "../state/orpal-context.js";
 import { MessageBubble } from "./MessageBubble.js";
+import orpCrab from "@/assets/orp-crab.svg";
 
 export function Conversation() {
   const {
@@ -25,6 +26,7 @@ export function Conversation() {
     return (
       <main className="conversation empty">
         <div className="center muted">
+          <img className="empty-mascot" src={orpCrab} alt="ORP crab mascot" />
           <p>Select a contact to start messaging.</p>
           <p className="hint">
             Messages and files travel peer-to-peer over WebRTC. The board only helps you find each

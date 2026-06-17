@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 200" role="img" aria-label="ORP crab mascot">
+  <defs>
+    <linearGradient id="crabBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a86f0"/>
+      <stop offset="1" stop-color="#2566cf"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#crabBody)" stroke="#173f86" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- legs (behind body) -->
+    <g fill="none" stroke-width="13">
+      <path d="M96 150 Q60 150 40 130"/>
+      <path d="M96 159 Q56 166 33 158"/>
+      <path d="M99 167 Q62 183 45 187"/>
+      <path d="M160 150 Q196 150 216 130"/>
+      <path d="M160 159 Q200 166 223 158"/>
+      <path d="M157 167 Q194 183 211 187"/>
+    </g>
+    <!-- claw arms -->
+    <g fill="none" stroke-width="15">
+      <path d="M90 96 Q60 84 47 62"/>
+      <path d="M166 96 Q196 84 209 62"/>
+    </g>
+    <!-- left pincer -->
+    <ellipse cx="41" cy="44" rx="19" ry="12" transform="rotate(-24 41 44)"/>
+    <ellipse cx="46" cy="61" rx="15" ry="9" transform="rotate(-8 46 61)"/>
+    <!-- right pincer -->
+    <ellipse cx="215" cy="44" rx="19" ry="12" transform="rotate(24 215 44)"/>
+    <ellipse cx="210" cy="61" rx="15" ry="9" transform="rotate(8 210 61)"/>
+    <!-- eye stalks (poke above the shell) -->
+    <path d="M112 52 L112 40" fill="none" stroke-width="7"/>
+    <path d="M144 52 L144 40" fill="none" stroke-width="7"/>
+    <circle cx="112" cy="35" r="7"/>
+    <circle cx="144" cy="35" r="7"/>
+    <!-- body shell -->
+    <path d="M70 92 C70 44 186 44 186 92 C192 132 165 178 128 182 C91 178 64 132 70 92 Z"/>
+  </g>
+
+  <!-- shield on the belly -->
+  <path d="M101 116 L155 116 L155 140 C155 160 128 172 128 172 C128 172 101 160 101 140 Z"
+        fill="#163f86" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+  <text x="128" y="143" text-anchor="middle" dominant-baseline="central"
+        font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="22"
+        letter-spacing="1" fill="#ffffff">ORP</text>
+
+  <!-- face -->
+  <g>
+    <circle cx="110" cy="86" r="15" fill="#ffffff" stroke="#173f86" stroke-width="3"/>
+    <circle cx="146" cy="86" r="15" fill="#ffffff" stroke="#173f86" stroke-width="3"/>
+    <circle cx="114" cy="88" r="6" fill="#0c2f6b"/>
+    <circle cx="142" cy="88" r="6" fill="#0c2f6b"/>
+    <circle cx="116" cy="85" r="2" fill="#ffffff"/>
+    <circle cx="144" cy="85" r="2" fill="#ffffff"/>
+    <path d="M118 104 Q128 116 138 104" fill="none" stroke="#173f86" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>
