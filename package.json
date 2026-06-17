@@ -17,7 +17,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev:web": "npm run build:core && npm run dev --workspace orpal-web",
     "build:web": "npm run build:core && npm run build --workspace orpal-web",
-    "preview:web": "npm run preview --workspace orpal-web"
+    "preview:web": "npm run preview --workspace orpal-web",
+    "sync:android": "npm run build:web && npm run sync --workspace orpal-android"
   },
   "license": "Apache-2.0"
 }

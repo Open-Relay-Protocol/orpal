@@ -1,0 +1,25 @@
+Orpal
+Copyright 2026 Prograde Solutions (Justin Avant and Benjamin Hewlett)
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Each source file carries an authoritative SPDX-License-Identifier header where
+applicable.
+
+---------------------------------------------------------------------------
+Third-party components
+---------------------------------------------------------------------------
+
+Vendored Open Relay Protocol (ORP) reference — orp-ref/, vendor-compiled into
+packages/orpal-core/vendor/orp/
+  Copyright 2026 Justin Avant and Benjamin Hewlett
+  Licensed under the Apache License, Version 2.0.
+  Source: https://github.com/Prograde-Solutions/orp
+  Only the Apache-2.0 portions (core/ and four client/ files) are vendored; the
+  AGPL-3.0 board/ broker and the Node-only ws/werift adapters are NOT included.
+
+Runtime cryptography is provided by the @noble libraries (@noble/curves,
+@noble/ciphers, @noble/hashes), which are MIT-licensed.
+
+Other dependencies retain their own licenses; see the respective package
+metadata in node_modules and package-lock.json.
