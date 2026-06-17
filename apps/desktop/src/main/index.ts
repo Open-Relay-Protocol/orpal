@@ -6,7 +6,7 @@
 // streaming file I/O. The renderer talks to these only through the preload bridge;
 // no Node API is ever exposed to it directly.
 
-import { app, BrowserWindow, ipcMain, session, systemPreferences } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, session, systemPreferences } from "electron";
 import { join } from "node:path";
 import { SecureKeyStoreMain } from "./secure-key-store.js";
 import { createConversationStore, type ClosableStore } from "./conversation-store.js";
@@ -66,6 +66,47 @@ async function registerIpc(): Promise<void> {
   // --- settings ---
   ipcMain.handle(CH.settingsGet, () => settings.get());
   ipcMain.handle(CH.settingsSet, (_e, s: DesktopSettings) => settings.set(s));
+
+  // --- clipboard (native, cross-OS) ---
+  // The sandboxed renderer can't reliably reach the OS clipboard via
+  // navigator.clipboard; Electron's module talks to the real backend on every
+  // platform. We coerce to string defensively so a bad payload can't throw deep
+  // inside the native call.
+  ipcMain.handle(CH.clipboardWrite, (_e, text: string) => {
+    clipboard.writeText(String(text ?? ""));
+  });
+  ipcMain.handle(CH.clipboardRead, () => clipboard.readText());
+
+  // --- auto-type (last-resort contact-card transfer) ---
+  ipcMain.handle(CH.inputAutoType, (_e, text: string) => autoType(String(text ?? "")));
+}
+
+const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Type `text` into the focused field of the main window by synthesizing
+ * keystrokes through Electron's input pipeline. This is the last resort for
+ * handing over a contact card when QR scanning fails AND the clipboard copy
+ * fails: the destination field is focused and the card is typed in character by
+ * character.
+ *
+ * `sendInputEvent` dispatches into this window's renderer, so the keystrokes
+ * land in whatever Orpal field currently holds focus. The small per-character
+ * delay keeps React's controlled inputs from coalescing/dropping characters
+ * when the card (a long JSON string) is typed quickly.
+ */
+async function autoType(text: string): Promise<void> {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) throw new Error("no-window");
+  win.focus();
+  win.webContents.focus();
+  for (const ch of text) {
+    if (win.isDestroyed()) return;
+    // `char` events carry the literal character in keyCode, so punctuation in
+    // the JSON ({ } " : etc.) is typed verbatim without keymap translation.
+    win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+    await delay(6);
+  }
 }
 
 function createWindow(): void {

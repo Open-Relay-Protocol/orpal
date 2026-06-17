@@ -41,6 +41,13 @@ const api: OrpalBridge = {
     get: () => ipcRenderer.invoke(CH.settingsGet),
     set: (s) => ipcRenderer.invoke(CH.settingsSet, s),
   },
+  clipboard: {
+    writeText: (text) => ipcRenderer.invoke(CH.clipboardWrite, text),
+    readText: () => ipcRenderer.invoke(CH.clipboardRead),
+  },
+  input: {
+    autoType: (text) => ipcRenderer.invoke(CH.inputAutoType, text),
+  },
 };
 
 contextBridge.exposeInMainWorld("orpal", api);

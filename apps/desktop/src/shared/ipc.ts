@@ -86,6 +86,22 @@ export interface OrpalBridge {
     get(): Promise<DesktopSettings>;
     set(settings: DesktopSettings): Promise<void>;
   };
+  /** Native OS clipboard, backed by Electron's main-process `clipboard` module.
+   *  The renderer is sandboxed (contextIsolation + sandbox), where
+   *  `navigator.clipboard.writeText` is unreliable/permission-gated and fails
+   *  silently — so contact-card copying goes through here instead. The Electron
+   *  module handles the per-OS backends (Win32, NSPasteboard, X11/Wayland)
+   *  transparently. */
+  clipboard: {
+    writeText(text: string): Promise<void>;
+    readText(): Promise<string>;
+  };
+  /** Synthesized keyboard typing — the last-resort way to hand a contact card to
+   *  another device when both the QR code and the clipboard fail. The keystrokes
+   *  are typed into whatever field is focused in the Orpal window. */
+  input: {
+    autoType(text: string): Promise<void>;
+  };
 }
 
 /** IPC channel names. One per bridge method; kept in one place to avoid typos. */
@@ -116,6 +132,11 @@ export const CH = {
 
   settingsGet: "settings:get",
   settingsSet: "settings:set",
+
+  clipboardWrite: "clipboard:write",
+  clipboardRead: "clipboard:read",
+
+  inputAutoType: "input:autoType",
 } as const;
 
 export const DEFAULT_SETTINGS: DesktopSettings = {
