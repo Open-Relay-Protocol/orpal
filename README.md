@@ -66,10 +66,17 @@ The same codebase ships two ways from one shared, framework-agnostic core:
   [security caveat](#security)). Your identity renders as a **QR code**; contacts
   import by **scanning** (webcam + jsQR) or **pasting**, with full binding
   validation (anti-substitution).
-- **Reliable messaging** — contact list, 1:1 conversations, and per-message
-  delivery state (sending → **delivered** via the §11 one-time-key ACK, or
-  **failed/retry** on `DeliveryTimeoutError`). History is persisted locally in the
-  browser (**IndexedDB**).
+- **Reliable messaging** — contact list, 1:1 conversations, and a full per-message
+  delivery lifecycle: **queued** (durable offline send-queue) → **sending** →
+  **delivered** (the §11 one-time-key ACK reached the peer's channel) →
+  **acknowledged** (the recipient's app stored it) → **failed/retry**. Retries are
+  idempotent (globally-unique message ids; a re-delivered message is stored once
+  and re-acknowledged). History is persisted locally in the browser (**IndexedDB**).
+- **Recipient-sealed messages** — every outbound text and file-offer is sealed to
+  the contact's **pinned** X25519 transport key (from their out-of-band-verified
+  card) with ORP's anonymous sealed box *before* it crosses the (already encrypted)
+  channel. A wrong-key / fake-peer connection can never read the payload, and a
+  message that fails to decrypt is dropped without being displayed or acknowledged.
 - **Offline send queue** — messages to an offline contact are persisted to a
   durable local **pending queue** (IndexedDB) and retried until the recipient
   confirms receipt with an app-level **acknowledgement** (`awk`) frame. Delivery
@@ -262,6 +269,12 @@ relay untrusted end-to-end:
   run before sealing.
 - Client-side anti-redirection: Orpal only proceeds with a match whose
   `counterparty_key` matches an intent it sent.
+- **App-layer recipient-sealing:** on top of the encrypted channel, Orpal seals
+  every user payload to the contact's **pinned** transport key (from their verified
+  card) with the reference's anonymous sealed box. This binds each message to the
+  out-of-band-verified identity, so even a connection made to a substituted/fake
+  transport key cannot read the contents — and an undecryptable message is dropped,
+  never displayed or acknowledged.
 - The board is treated as fully untrusted. All of this lives in the reference
   `Client`, which Orpal drives **unmodified**.
 
@@ -297,6 +310,13 @@ The suites cover:
   and removed from the queue once its `awk` arrives; it also survives a simulated
   reload (a restarted client resumes and delivers), plus unit checks on the
   delivery worker's backoff schedule and the pending-queue metrics.
+- **`sealed-messages`** — recipient-sealing: a text/file-offer round-trips through
+  the right transport key, the plaintext never appears on the wire, a wrong key /
+  tampered box / unknown alg cannot be opened, and a send with no pinned key fails
+  closed (it is never sent unsealed).
+- **`duplicate-suppression`** — a re-delivered message id is stored exactly once
+  yet re-acknowledged, message ids are globally unique, and retries update the
+  existing history row in place rather than appending a duplicate.
 - **`integration-board`** *(opt-in)* — the same round-trip through the **real**
   reference board over real WebSockets. Run with a board up:
   `ORP_BOARD_URL=ws://127.0.0.1:8080/ npx vitest run test/integration-board.test.ts`

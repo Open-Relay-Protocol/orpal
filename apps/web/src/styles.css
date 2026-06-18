@@ -272,6 +272,24 @@ textarea.mono,
 .broker-error .dot { background: var(--err); }
 .broker-closed,
 .broker-error { color: var(--err); }
+.queue-status {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: var(--warn);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.queue-status .queue-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 4px currentColor;
+  animation: blink 1.4s steps(2) infinite;
+}
 @keyframes blink {
   50% { opacity: 0.55; }
 }
@@ -556,8 +574,10 @@ textarea.mono,
   font-size: 10px;
   color: var(--muted);
 }
-.delivery.delivered { color: var(--lcd); text-shadow: 0 0 4px rgba(79, 160, 255, 0.6); }
+.delivery.queued { color: var(--muted); }
 .delivery.sending { color: var(--warn); }
+.delivery.delivered { color: var(--lcd); text-shadow: 0 0 4px rgba(79, 160, 255, 0.45); }
+.delivery.acknowledged { color: var(--ok); text-shadow: 0 0 4px rgba(79, 160, 255, 0.6); }
 .delivery.failed { color: var(--err); font-weight: 700; }
 .retry {
   padding: 1px 8px;

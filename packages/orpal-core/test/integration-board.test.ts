@@ -9,6 +9,7 @@ import {
   type WebRTCEndpoint,
 } from "../src/index.js";
 import { once } from "./helpers/wait.js";
+import { linkBoth } from "./helpers/link.js";
 
 // Integration test against a REAL running reference board.
 //
@@ -48,6 +49,7 @@ run("message round-trip + ACK against the live reference board", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await linkBoth(a, b);
     // Give presence a beat to register on the board.
     await new Promise((r) => setTimeout(r, 300));
 

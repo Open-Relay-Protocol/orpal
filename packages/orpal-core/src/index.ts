@@ -24,6 +24,7 @@ export * from "./persistence/conversation-store.js";
 
 // Messaging + file transfer.
 export * from "./messaging/frames.js";
+export * from "./messaging/sealed.js";
 export * from "./messaging/orpal-client.js";
 export * from "./messaging/pending-queue.js";
 export * from "./messaging/delivery-worker.js";

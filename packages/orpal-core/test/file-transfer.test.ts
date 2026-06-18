@@ -19,6 +19,7 @@ import {
 } from "../src/index.js";
 import { MockBoard } from "./helpers/mock-board.js";
 import { once } from "./helpers/wait.js";
+import { link } from "./helpers/link.js";
 
 function makeBytes(n: number): Uint8Array {
   const b = new Uint8Array(n);
@@ -170,6 +171,7 @@ describe("file transfer: chunking, reassembly, integrity, idempotency", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await link(a, b); // A pins B's transport key so it can seal the file-offer (#23)
 
     const completed = once(
       b.events,

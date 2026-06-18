@@ -8,11 +8,19 @@
 
 import type { Contact } from "../contacts/contact.js";
 
-/** Lifecycle of an OUTBOUND message, driven by the §11 ACK layer. */
+/**
+ * Lifecycle of an OUTBOUND message (issue #22). Two distinct receipts are
+ * surfaced: the transport-level §11 one-time-key ACK ("delivered" — the frame
+ * reached the peer's channel) and the app-level awk ("acknowledged" — the peer
+ * stored/displayed it). "queued" is the durable offline-queue state before any
+ * successful dispatch.
+ */
 export type OutboundState =
-  | "sending" // in the ReliableChannel pending queue, awaiting ACK
-  | "delivered" // a valid one-time-key ACK came back (SPEC §11)
-  | "failed"; // DeliveryTimeoutError — no ACK in time; caller may retry
+  | "queued" // in the durable offline send-queue, not yet dispatched (no live channel yet)
+  | "sending" // an attempt is in flight over a live ReliableChannel, awaiting its §11 ACK
+  | "delivered" // the §11 one-time-key ACK came back: the frame reached the peer's channel
+  | "acknowledged" // the recipient's app-level awk came back: stored + displayed (see frames.ts)
+  | "failed"; // gave up (offline with no queue, or DeliveryTimeoutError); caller may retry
 
 /** Lifecycle of a FILE transfer (either direction). */
 export type TransferState =

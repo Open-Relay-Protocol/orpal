@@ -14,6 +14,7 @@ import {
 } from "../src/index.js";
 import { MockBoard } from "./helpers/mock-board.js";
 import { once, waitFor } from "./helpers/wait.js";
+import { link, linkIdentity } from "./helpers/link.js";
 
 // Offline message persistence with acknowledgement-based delivery (issue #11).
 //
@@ -53,17 +54,22 @@ describe("offline pending queue + awk delivery", () => {
     live = [a];
     await a.start();
 
-    const absent = DeviceIdentity.generate().identityKeyB64;
+    // An added-but-offline contact (its card is pinned so we can seal to it).
+    const absentId = DeviceIdentity.generate();
+    const absent = absentId.identityKeyB64;
+    await linkIdentity(a, absentId);
     const id = await a.sendText(absent, "are you there?");
 
     // It lands in the durable pending queue (survives reload), not failed.
     await waitFor(async () => (await queue.get(id)) !== null);
     const pending = await queue.get(id);
     expect(pending?.recipientId).toBe(absent);
+    expect(pending?.recipientTransportKey).toBe(absentId.transportKeyB64);
     expect(pending?.payload).toEqual({ kind: "text", text: "are you there?" });
 
     const hist = await a.history(absent);
-    expect(hist.find((m) => m.id === id)?.state).toBe("sending");
+    // Queued (never dispatched — the recipient is offline), not "sending" (#22).
+    expect(hist.find((m) => m.id === id)?.state).toBe("queued");
 
     const metrics = await a.pendingMetrics();
     expect(metrics.total).toBe(1);
@@ -78,6 +84,7 @@ describe("offline pending queue + awk delivery", () => {
     const b = client({ connectTimeoutMs: 150 }, board, network);
     live = [a, b];
     await a.start();
+    await link(a, b); // pin B's transport key (B's card works before B starts)
     // B is NOT online yet — the first attempts fail and the message stays queued.
 
     const id = await a.sendText(b.identityKey, "hello (offline)");
@@ -117,6 +124,7 @@ describe("offline pending queue + awk delivery", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await link(a, b);
 
     const delivered = once(
       a.events,
@@ -152,6 +160,7 @@ describe("offline pending queue + awk delivery", () => {
       pendingQueue: queue,
     });
     await a1.start();
+    await linkIdentity(a1, bId); // pin B's transport key so the queued msg can be sealed
     const id = await a1.sendText(bId.identityKeyB64, "persisted across reload");
     await waitFor(async () => (await queue.get(id)) !== null);
     a1.close();
@@ -189,6 +198,7 @@ describe("offline pending queue + awk delivery", () => {
 describe("DeliveryWorker retry/backoff", () => {
   const mkMsg = (overrides: Partial<PendingMessage> = {}): PendingMessage => ({
     recipientId: "peer",
+    recipientTransportKey: "peer-transport-key",
     messageId: "m1",
     timestamp: 1000,
     attemptCount: 0,
@@ -269,16 +279,25 @@ describe("DeliveryWorker retry/backoff", () => {
     worker.stop();
   });
 
-  it("computePendingMetrics reports total and oldest pending timestamp", () => {
+  it("computePendingMetrics reports total, oldest, attempts, and last attempt", () => {
     const rows: PendingMessage[] = [
-      mkMsg({ messageId: "a", timestamp: 500, recipientId: "x" }),
-      mkMsg({ messageId: "b", timestamp: 200, recipientId: "x" }),
-      mkMsg({ messageId: "c", timestamp: 900, recipientId: "y" }),
+      mkMsg({ messageId: "a", timestamp: 500, recipientId: "x", attemptCount: 2, lastAttemptAt: 1500 }),
+      mkMsg({ messageId: "b", timestamp: 200, recipientId: "x", attemptCount: 1, lastAttemptAt: 1800 }),
+      mkMsg({ messageId: "c", timestamp: 900, recipientId: "y", attemptCount: 5, lastAttemptAt: 1200 }),
     ];
     const m = computePendingMetrics(rows);
     expect(m.total).toBe(3);
     expect(m.oldestPendingTs).toBe(200);
     expect(m.byRecipient).toEqual({ x: 2, y: 1 });
-    expect(computePendingMetrics([]).oldestPendingTs).toBeNull();
+    // Queue-health additions (issue #17): attempt totals + most-recent attempt.
+    expect(m.totalAttempts).toBe(8);
+    expect(m.maxAttempts).toBe(5);
+    expect(m.lastAttemptAt).toBe(1800);
+
+    const empty = computePendingMetrics([]);
+    expect(empty.oldestPendingTs).toBeNull();
+    expect(empty.lastAttemptAt).toBeNull();
+    expect(empty.totalAttempts).toBe(0);
+    expect(empty.maxAttempts).toBe(0);
   });
 });

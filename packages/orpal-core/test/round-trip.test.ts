@@ -9,6 +9,7 @@ import {
 } from "../src/index.js";
 import { MockBoard } from "./helpers/mock-board.js";
 import { once, waitFor } from "./helpers/wait.js";
+import { linkBoth } from "./helpers/link.js";
 
 // The "Start by" milestone: a single text message round-trips with a working ACK
 // between two clients, against an (in-memory) board.
@@ -45,16 +46,19 @@ describe("text message round-trip with ACK", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await linkBoth(a, b);
 
     const received = once(
       b.events,
       "message",
       (e) => e.message.direction === "in" && e.message.text === "hello there",
     );
-    const deliveredP = once(
+    // The app-level awk is the terminal receipt (issue #22): delivered (§11 ACK)
+    // → acknowledged (peer stored it).
+    const acknowledgedP = once(
       a.events,
       "message-updated",
-      (e) => e.message.direction === "out" && e.message.state === "delivered",
+      (e) => e.message.direction === "out" && e.message.state === "acknowledged",
     );
 
     const id = await a.sendText(b.identityKey, "hello there");
@@ -63,13 +67,13 @@ describe("text message round-trip with ACK", () => {
     expect(got.message.text).toBe("hello there");
     expect(got.message.contactKey).toBe(a.identityKey);
 
-    const delivered = await deliveredP;
-    expect(delivered.id).toBe(id);
+    const acknowledged = await acknowledgedP;
+    expect(acknowledged.id).toBe(id);
 
     // History on both sides reflects the exchange.
     const aHist = await a.history(b.identityKey);
     const bHist = await b.history(a.identityKey);
-    expect(aHist.find((m) => m.id === id)?.state).toBe("delivered");
+    expect(aHist.find((m) => m.id === id)?.state).toBe("acknowledged");
     expect(bHist.some((m) => m.text === "hello there" && m.direction === "in")).toBe(true);
   });
 
@@ -78,6 +82,7 @@ describe("text message round-trip with ACK", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await linkBoth(a, b);
 
     // A → B establishes the connection.
     const bGotFirst = once(b.events, "message", (e) => e.message.text === "ping");
@@ -102,6 +107,7 @@ describe("text message round-trip with ACK", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await linkBoth(a, b);
 
     await a.connect(b.identityKey);
     await waitFor(() => a.contactState(b.identityKey) === "connected");

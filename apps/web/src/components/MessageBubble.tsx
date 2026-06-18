@@ -10,10 +10,14 @@ function formatBytes(n: number): string {
 
 function deliveryGlyph(state: StoredMessage["state"]): { glyph: string; cls: string; label: string } {
   switch (state) {
+    case "queued":
+      return { glyph: "🕓", cls: "queued", label: "Queued — waiting for the contact to come online" };
     case "sending":
-      return { glyph: "•", cls: "sending", label: "Sending…" };
+      return { glyph: "•", cls: "sending", label: "Attempting delivery…" };
     case "delivered":
-      return { glyph: "✓✓", cls: "delivered", label: "Delivered (ACK)" };
+      return { glyph: "✓", cls: "delivered", label: "Delivered to their device (channel ACK)" };
+    case "acknowledged":
+      return { glyph: "✓✓", cls: "acknowledged", label: "Acknowledged — read by the app" };
     case "failed":
       return { glyph: "!", cls: "failed", label: "Failed" };
   }

@@ -13,6 +13,7 @@ import {
   type Contact,
   type ContactState,
   type OrpalClient,
+  type PendingMetrics,
   type StoredMessage,
 } from "@orpal/core";
 import type { AppSettings } from "@shared/ipc";
@@ -39,6 +40,8 @@ interface OrpalContextValue {
   messages: StoredMessage[];
   connectionOf: (key: string) => ContactState;
   brokerState: BrokerState;
+  /** Offline send-queue health (issue #17): pending count, oldest, attempts. */
+  pendingMetrics: PendingMetrics;
   settings: AppSettings;
   settingsNeedRestart: boolean;
 
@@ -57,6 +60,15 @@ interface OrpalContextValue {
   saveSettings: (s: AppSettings) => Promise<void>;
   reveal: (path: string) => void;
 }
+
+const EMPTY_METRICS: PendingMetrics = {
+  total: 0,
+  oldestPendingTs: null,
+  lastAttemptAt: null,
+  totalAttempts: 0,
+  maxAttempts: 0,
+  byRecipient: {},
+};
 
 const OrpalContext = createContext<OrpalContextValue | null>(null);
 
@@ -79,6 +91,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [messagesByContact, setMessagesByContact] = useState<Record<string, StoredMessage[]>>({});
   const [connByContact, setConnByContact] = useState<Record<string, ContactState>>({});
   const [brokerState, setBrokerState] = useState<BrokerState>("connecting");
+  const [pendingMetrics, setPendingMetrics] = useState<PendingMetrics>(EMPTY_METRICS);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsNeedRestart, setSettingsNeedRestart] = useState(false);
 
@@ -118,6 +131,10 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         app.orpal.events.on("broker", ({ state }) => setBrokerState(state));
         // Seed from current state in case "open" fired before we subscribed.
         setBrokerState(app.orpal.brokerStatus);
+        // Offline send-queue health (issue #17): live updates + an initial seed
+        // (the queue may already hold messages resumed from a previous session).
+        app.orpal.events.on("pending", ({ metrics }) => setPendingMetrics(metrics));
+        setPendingMetrics(await app.orpal.pendingMetrics());
         app.orpal.events.on("error", ({ error, context }) =>
           // eslint-disable-next-line no-console
           console.warn("[orpal]", context, error),
@@ -251,6 +268,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     messages: selected ? messagesByContact[selected] ?? [] : [],
     connectionOf,
     brokerState,
+    pendingMetrics,
     settings: settings ?? { boards: [], iceServers: [], relayOnlyByDefault: false },
     settingsNeedRestart,
     select,
