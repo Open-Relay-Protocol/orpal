@@ -8,7 +8,7 @@ import { SettingsModal } from "./SettingsModal.js";
 import { CrabMascot } from "./CrabMascot.js";
 
 function Shell() {
-  const { status, errorMsg } = useOrpal();
+  const { status, errorMsg, selected } = useOrpal();
   const [modal, setModal] = useState<null | "identity" | "add" | "settings">(null);
 
   if (status === "loading") {
@@ -26,8 +26,11 @@ function Shell() {
     );
   }
 
+  // On narrow (phone) viewports only one pane shows at a time; this class tells
+  // the CSS whether to reveal the contact list or the open conversation. Wider
+  // tablets and foldables show both panes side by side (see styles.css).
   return (
-    <div className="app">
+    <div className={`app ${selected ? "app--conversation" : "app--list"}`}>
       <Sidebar
         onShowIdentity={() => setModal("identity")}
         onAddContact={() => setModal("add")}
