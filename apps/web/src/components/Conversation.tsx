@@ -8,12 +8,15 @@ export function Conversation() {
   const {
     selected,
     conversations,
+    contacts,
     messages,
     connectionOf,
     sendText,
     sendFile,
     connect,
     setRelayOnly,
+    setContactBoards,
+    settings,
     select,
     brokerState,
   } = useOrpal();
@@ -43,12 +46,21 @@ export function Conversation() {
   }
 
   const convo = conversations.find((c) => c.key === selected);
+  const contact = contacts.find((c) => c.identityKey === selected);
   const state = connectionOf(selected);
+  const boards = settings.boards;
+  const preferred = contact?.preferredBoards ?? [];
 
   const onSend = () => {
     if (!draft.trim()) return;
     sendText(draft);
     setDraft("");
+  };
+
+  const toggleBoard = (url: string, on: boolean) => {
+    if (!selected) return;
+    const next = on ? [...new Set([...preferred, url])] : preferred.filter((b) => b !== url);
+    void setContactBoards(selected, next);
   };
 
   return (
@@ -79,6 +91,30 @@ export function Conversation() {
               />
               relay-only
             </label>
+          )}
+          {convo?.known && boards.length > 1 && (
+            <details className="board-routes">
+              <summary title="Choose which boards to reach this contact on (issue #19)">
+                boards{preferred.length ? ` · ${preferred.length}` : " · all"}
+              </summary>
+              <div className="board-routes-menu">
+                <div className="board-routes-hint muted">
+                  {preferred.length === 0
+                    ? "Using all boards. Pick specific boards to route only over them."
+                    : "Only the checked boards are used to reach this contact."}
+                </div>
+                {boards.map((url) => (
+                  <label key={url} className="board-route">
+                    <input
+                      type="checkbox"
+                      checked={preferred.includes(url)}
+                      onChange={(e) => toggleBoard(url, e.target.checked)}
+                    />
+                    <span className="board-route-url">{url}</span>
+                  </label>
+                ))}
+              </div>
+            </details>
           )}
           {state !== "connected" && (
             <button className="ghost" onClick={() => connect(selected)}>

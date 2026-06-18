@@ -57,6 +57,8 @@ interface OrpalContextValue {
   ) => Promise<{ ok: boolean; reason?: string }>;
   removeContact: (key: string) => Promise<void>;
   setRelayOnly: (key: string, value: boolean) => Promise<void>;
+  /** Per-contact board routes (issue #19); empty list restores all-boards default. */
+  setContactBoards: (key: string, preferredBoards: string[]) => Promise<void>;
   saveSettings: (s: AppSettings) => Promise<void>;
   reveal: (path: string) => void;
 }
@@ -224,6 +226,16 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts],
   );
 
+  const setContactBoards = useCallback(
+    async (key: string, preferredBoards: string[]) => {
+      await orpalRef.current?.setContactBoards(key, { preferredBoards });
+      await refreshContacts();
+      // Re-establish over the new routes if we're talking to them now.
+      orpalRef.current?.connect(key).catch(() => {});
+    },
+    [refreshContacts],
+  );
+
   const saveSettings = useCallback(async (s: AppSettings) => {
     await window.orpal.settings.set(s);
     setSettings(s);
@@ -279,6 +291,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     addContact,
     removeContact,
     setRelayOnly,
+    setContactBoards,
     saveSettings,
     reveal,
   };

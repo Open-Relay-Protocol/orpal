@@ -66,6 +66,10 @@ The same codebase ships two ways from one shared, framework-agnostic core:
   [security caveat](#security)). Your identity renders as a **QR code**; contacts
   import by **scanning** (webcam + jsQR) or **pasting**, with full binding
   validation (anti-substitution).
+- **Per-contact board routing** — each contact can carry its own **board routes**
+  (preferred + fallback). When set, delivery to that contact uses *only* those
+  boards instead of fanning an intent out to every board; unset contacts keep the
+  global all-boards behavior. Choose a contact's boards from the conversation header.
 - **Reliable messaging** — contact list, 1:1 conversations, and a full per-message
   delivery lifecycle: **queued** (durable offline send-queue) → **sending** →
   **delivered** (the §11 one-time-key ACK reached the peer's channel) →
@@ -317,6 +321,10 @@ The suites cover:
 - **`duplicate-suppression`** — a re-delivered message id is stored exactly once
   yet re-acknowledged, message ids are globally unique, and retries update the
   existing history row in place rather than appending a duplicate.
+- **`per-contact-boards`** — a contact's configured board routes are honored:
+  delivery uses only those boards (a contact pinned to the wrong board is
+  unreachable even if it's online elsewhere), `setContactBoards` reroutes live, and
+  an unconfigured contact still fans out to all boards.
 - **`integration-board`** *(opt-in)* — the same round-trip through the **real**
   reference board over real WebSockets. Run with a board up:
   `ORP_BOARD_URL=ws://127.0.0.1:8080/ npx vitest run test/integration-board.test.ts`

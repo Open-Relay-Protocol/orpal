@@ -21,6 +21,17 @@ export interface Contact {
   /** Privacy-sensitive contact: use relay-only ICE (SPEC §6) so the peer never
    *  learns this device's IP. Requires a configured TURN server. */
   relayOnly: boolean;
+  /**
+   * Per-contact board routing (issue #19). Board ids (the web shell uses the
+   * board URL as its id) this contact is reachable on. When BOTH lists are empty
+   * / undefined, delivery fans out to ALL configured boards (the global default).
+   * When set, delivery attempts use ONLY these boards — preferred first, then
+   * fallback — so a contact known to live on a specific board isn't announced to
+   * every board.
+   */
+  preferredBoards?: string[];
+  /** Boards to also try when no preferred board is reachable. */
+  fallbackBoards?: string[];
   addedUtc: string;
 }
 
@@ -103,7 +114,13 @@ export function parseContactCard(input: string): ParsedCard {
 /** Turn a validated card into a Contact record for storage. */
 export function contactFromCard(
   card: ContactCard,
-  opts: { displayName?: string; relayOnly?: boolean; now?: () => string } = {},
+  opts: {
+    displayName?: string;
+    relayOnly?: boolean;
+    preferredBoards?: string[];
+    fallbackBoards?: string[];
+    now?: () => string;
+  } = {},
 ): Contact {
   return {
     identityKey: card.identity_key,
@@ -111,6 +128,8 @@ export function contactFromCard(
     binding: card.binding,
     displayName: opts.displayName ?? card.name ?? shortKey(card.identity_key),
     relayOnly: opts.relayOnly ?? false,
+    preferredBoards: opts.preferredBoards ?? [],
+    fallbackBoards: opts.fallbackBoards ?? [],
     addedUtc: (opts.now ?? (() => new Date().toISOString()))(),
   };
 }
