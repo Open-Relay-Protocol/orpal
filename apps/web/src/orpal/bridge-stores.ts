@@ -10,6 +10,9 @@ import type {
   FileSource,
   IncomingFileSink,
   ListMessagesOptions,
+  PendingMessage,
+  PendingPatch,
+  PendingQueueStore,
   SecureKeyStore,
   StoredKeys,
   StoredMessage,
@@ -54,6 +57,29 @@ export class IpcConversationStore implements ConversationStore {
   }
   listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]> {
     return window.orpal.store.listMessages(contactKey, opts);
+  }
+}
+
+/** Durable offline send-queue via the shell's store (IndexedDB in the browser
+ *  bridge). Lets OrpalClient persist + retry messages to offline contacts. */
+export class IpcPendingQueueStore implements PendingQueueStore {
+  init(): Promise<void> {
+    return window.orpal.pending.init();
+  }
+  enqueue(msg: PendingMessage): Promise<void> {
+    return window.orpal.pending.enqueue(msg);
+  }
+  update(messageId: string, patch: PendingPatch): Promise<void> {
+    return window.orpal.pending.update(messageId, patch);
+  }
+  remove(messageId: string): Promise<void> {
+    return window.orpal.pending.remove(messageId);
+  }
+  get(messageId: string): Promise<PendingMessage | null> {
+    return window.orpal.pending.get(messageId);
+  }
+  list(): Promise<PendingMessage[]> {
+    return window.orpal.pending.list();
   }
 }
 

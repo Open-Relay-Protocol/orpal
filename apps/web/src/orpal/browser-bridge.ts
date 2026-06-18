@@ -24,7 +24,14 @@
 
 import { sha256 } from "@noble/hashes/sha2";
 import { bytesToHex } from "@noble/hashes/utils";
-import type { Contact, StoredKeys, StoredMessage, ListMessagesOptions } from "@orpal/core";
+import type {
+  Contact,
+  StoredKeys,
+  StoredMessage,
+  ListMessagesOptions,
+  PendingMessage,
+  PendingPatch,
+} from "@orpal/core";
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
@@ -37,6 +44,7 @@ import {
 import {
   STORE_CONTACTS,
   STORE_MESSAGES,
+  STORE_PENDING,
   del,
   get,
   getAll,
@@ -181,6 +189,21 @@ const bridge: OrpalBridge = {
       if (opts.limit !== undefined) rows = rows.slice(0, opts.limit);
       return rows;
     },
+  },
+
+  pending: {
+    init: async () => {
+      /* IndexedDB stores are created lazily on first open (see idb.ts). */
+    },
+    enqueue: (msg: PendingMessage) => put(STORE_PENDING, msg),
+    update: async (messageId: string, patch: PendingPatch) => {
+      const existing = await get<PendingMessage>(STORE_PENDING, messageId);
+      if (!existing) return;
+      await put(STORE_PENDING, { ...existing, ...patch });
+    },
+    remove: (messageId: string) => del(STORE_PENDING, messageId),
+    get: (messageId: string) => get<PendingMessage>(STORE_PENDING, messageId),
+    list: () => getAll<PendingMessage>(STORE_PENDING),
   },
 
   files: {
