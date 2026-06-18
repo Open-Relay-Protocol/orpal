@@ -14,6 +14,7 @@ export function Conversation() {
     sendFile,
     connect,
     setRelayOnly,
+    select,
     brokerState,
   } = useOrpal();
   const [draft, setDraft] = useState("");
@@ -54,6 +55,14 @@ export function Conversation() {
     <main className="conversation">
       <header className="convo-header">
         <div className="convo-title">
+          <button
+            className="ghost convo-back"
+            title="Back to contacts"
+            aria-label="Back to contacts"
+            onClick={() => select(null)}
+          >
+            ‹
+          </button>
           <span className="convo-h-name marquee">
             <span>
               {convo?.name ?? shortKey(selected)} · {presenceText(state)} ···
@@ -81,8 +90,8 @@ export function Conversation() {
 
       {state === "down" && (
         <div className="offline-banner">
-          This contact appears offline. Orpal has no store-and-forward, so messages can’t be
-          delivered until they’re online — they’ll be marked failed and you can retry.
+          This contact appears offline. The board has no store-and-forward, but your messages are
+          saved locally and delivered automatically the moment they come back online.
         </div>
       )}
 

@@ -139,10 +139,26 @@ textarea.mono,
 }
 
 /* ---- layout ---- */
+/* Two panes side by side on tablets/desktop; the sidebar width flexes a little
+   so it doesn't dominate narrower tablets. Phones collapse to a single pane
+   (see the responsive block at the end of this file). */
 .app {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: clamp(248px, 30vw, 320px) 1fr;
   height: 100%;
+  /* keep content clear of notches/rounded corners in landscape */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* "Back to contacts" affordance — only meaningful in the single-pane phone
+   layout, so it's hidden until the mobile breakpoint reveals it. */
+.convo-back {
+  display: none;
+  flex: none;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 10px;
 }
 
 .sidebar {
@@ -157,6 +173,7 @@ textarea.mono,
 /* the classic Winamp titlebar gradient, in ORP blue */
 .sidebar-head {
   padding: 10px 14px;
+  padding-top: calc(10px + env(safe-area-inset-top));
   background: linear-gradient(var(--title-1), var(--title-2));
   border-bottom: 1px solid var(--metal-lo);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
@@ -337,6 +354,7 @@ textarea.mono,
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--metal-lo);
   background: linear-gradient(var(--panel), var(--panel-2));
 }
@@ -437,6 +455,7 @@ textarea.mono,
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
+  padding-top: calc(8px + env(safe-area-inset-top));
   background: linear-gradient(var(--title-1), var(--title-2));
   border-bottom: 1px solid var(--metal-lo);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
@@ -451,7 +470,7 @@ textarea.mono,
 /* the LCD track-title display + scrolling ticker */
 .convo-h-name {
   display: inline-block;
-  max-width: 360px;
+  max-width: min(360px, 100%);
   overflow: hidden;
   white-space: nowrap;
   background: var(--lcd-bg);
@@ -577,6 +596,7 @@ textarea.mono,
   display: flex;
   gap: 8px;
   padding: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--metal-lo);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   align-items: flex-end;
@@ -707,3 +727,123 @@ textarea.mono,
 .error-text { color: #ffb0a8; font-size: 12.5px; }
 .info-text { color: var(--lcd); font-size: 12.5px; text-shadow: 0 0 4px rgba(79, 160, 255, 0.4); }
 .error-box { max-width: 460px; }
+
+/* =========================================================================
+   Responsive — phones, foldables, and tablets.
+
+   Phones (and a folded foldable's narrow outer screen) show ONE pane at a time:
+   the contact list, or the open conversation reached by tapping a contact and
+   returned from with the "‹" back button. Tablets and unfolded foldables keep
+   both panes side by side. A dual-screen foldable aligns the split to the hinge.
+   ========================================================================= */
+
+/* ---- single-pane layout for narrow viewports (phones) ---- */
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+  /* Reveal exactly one pane; the other collapses out of the grid entirely so
+     the visible one fills the screen. */
+  .app--list > .conversation {
+    display: none;
+  }
+  .app--conversation > .sidebar {
+    display: none;
+  }
+  .convo-back {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Roomier, finger-sized touch targets and breathing room. */
+  .sidebar-actions {
+    gap: 8px;
+    padding: 12px;
+  }
+  .sidebar-actions button {
+    min-height: 44px;
+  }
+  .convo {
+    padding: 13px 16px;
+  }
+  .convo-name {
+    font-size: 13px;
+  }
+  .convo-sub {
+    font-size: 12px;
+  }
+  /* Give message bubbles more of the row on a small screen. */
+  .bubble {
+    max-width: 85%;
+  }
+  .messages {
+    padding: 12px;
+    gap: 10px;
+  }
+  /* Composer controls big enough to tap; the field stays the flexible middle. */
+  .composer {
+    padding: 8px;
+    gap: 6px;
+  }
+  .composer button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .convo-header {
+    gap: 8px;
+  }
+  .convo-header-actions {
+    gap: 8px;
+  }
+  /* The relay-only label eats width next to the back/connect buttons; keep just
+     the checkbox (its title tooltip still explains it). */
+  .relay-toggle {
+    font-size: 0;
+    gap: 0;
+  }
+  .relay-toggle input {
+    width: auto;
+  }
+}
+
+/* ---- very small / older phones ---- */
+@media (max-width: 360px) {
+  .brand {
+    font-size: 14px;
+    letter-spacing: 2px;
+  }
+  .bubble {
+    max-width: 92%;
+  }
+}
+
+/* ---- landscape phones: trim vertical chrome so the thread keeps its room ---- */
+@media (max-height: 480px) and (orientation: landscape) {
+  .eq,
+  .tagline {
+    display: none;
+  }
+  .sidebar-head {
+    padding-top: calc(6px + env(safe-area-inset-top));
+    padding-bottom: 6px;
+  }
+}
+
+/* ---- dual-screen / book-posture foldables (two side-by-side segments) ----
+   Show both panes and align the column split to the physical hinge so neither
+   pane is hidden behind it. Falls back gracefully where the API is absent. */
+@media (horizontal-viewport-segments: 2) {
+  .app {
+    /* sidebar fills the first segment; the hinge becomes the column gap */
+    grid-template-columns: env(viewport-segment-width 0 0) 1fr;
+    column-gap: calc(env(viewport-segment-left 1 0) - env(viewport-segment-width 0 0));
+  }
+  /* Both panes are visible across the fold regardless of selection. */
+  .app--list > .conversation,
+  .app--conversation > .sidebar {
+    display: flex;
+  }
+  .convo-back {
+    display: none;
+  }
+}
