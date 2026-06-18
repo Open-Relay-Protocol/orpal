@@ -272,6 +272,24 @@ textarea.mono,
 .broker-error .dot { background: var(--err); }
 .broker-closed,
 .broker-error { color: var(--err); }
+.queue-status {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: var(--warn);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.queue-status .queue-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 4px currentColor;
+  animation: blink 1.4s steps(2) infinite;
+}
 @keyframes blink {
   50% { opacity: 0.55; }
 }
@@ -507,6 +525,48 @@ textarea.mono,
 }
 .relay-toggle input { width: auto; }
 
+.board-routes {
+  position: relative;
+  font-size: 11px;
+  color: #cfe0ff;
+}
+.board-routes > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  white-space: nowrap;
+}
+.board-routes > summary::-webkit-details-marker { display: none; }
+.board-routes-menu {
+  position: absolute;
+  right: 0;
+  top: 130%;
+  z-index: 20;
+  min-width: 240px;
+  max-width: 320px;
+  background: #0b1a33;
+  border: 1px solid #1d3a63;
+  border-radius: 4px;
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.board-routes-hint { font-size: 10px; line-height: 1.4; }
+.board-route {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+}
+.board-route input { width: auto; flex: none; }
+.board-route-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .offline-banner {
   background: repeating-linear-gradient(45deg, #2a0f0c, #2a0f0c 10px, #200b09 10px, #200b09 20px);
   color: #ffb0a8;
@@ -556,8 +616,10 @@ textarea.mono,
   font-size: 10px;
   color: var(--muted);
 }
-.delivery.delivered { color: var(--lcd); text-shadow: 0 0 4px rgba(79, 160, 255, 0.6); }
+.delivery.queued { color: var(--muted); }
 .delivery.sending { color: var(--warn); }
+.delivery.delivered { color: var(--lcd); text-shadow: 0 0 4px rgba(79, 160, 255, 0.45); }
+.delivery.acknowledged { color: var(--ok); text-shadow: 0 0 4px rgba(79, 160, 255, 0.6); }
 .delivery.failed { color: var(--err); font-weight: 700; }
 .retry {
   padding: 1px 8px;

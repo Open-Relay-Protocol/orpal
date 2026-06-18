@@ -25,6 +25,12 @@ export type PendingPayload = { kind: "text"; text: string };
 export interface PendingMessage {
   /** Contact identity key the message is addressed to. */
   recipientId: string;
+  /**
+   * Recipient's PINNED b64u X25519 transport key (from their verified contact
+   * card). Carried in the queue so the message can be re-sealed (issue #23) on
+   * every retry — including after a reload, independent of the contact store.
+   */
+  recipientTransportKey: string;
   /** Client-generated id, stable across every retry; matched by the awk. */
   messageId: string;
   /** Epoch-ms the message was first enqueued (its logical send time). */
@@ -59,13 +65,20 @@ export interface PendingQueueStore {
   list(): Promise<PendingMessage[]>;
 }
 
-/** Local observability snapshot of the pending queue (count + oldest), for
- *  debugging the offline-delivery path. */
+/** Local observability snapshot of the pending queue (issue #17): queue health
+ *  for surfacing in the UI and debugging the offline-delivery path. */
 export interface PendingMetrics {
   /** How many messages are still waiting for an awk. */
   total: number;
   /** Epoch-ms timestamp of the oldest still-pending message, or null if empty. */
   oldestPendingTs: number | null;
+  /** Epoch-ms of the most recent delivery attempt across the queue, or null if
+   *  nothing has been attempted yet. */
+  lastAttemptAt: number | null;
+  /** Total delivery attempts made across all queued messages so far. */
+  totalAttempts: number;
+  /** Largest attempt count of any single queued message (the most-retried one). */
+  maxAttempts: number;
   /** Pending count broken down by recipient identity key. */
   byRecipient: Record<string, number>;
 }
@@ -73,12 +86,20 @@ export interface PendingMetrics {
 /** Derive the metrics snapshot from a queue listing. */
 export function computePendingMetrics(rows: PendingMessage[]): PendingMetrics {
   let oldest: number | null = null;
+  let lastAttemptAt: number | null = null;
+  let totalAttempts = 0;
+  let maxAttempts = 0;
   const byRecipient: Record<string, number> = {};
   for (const m of rows) {
     if (oldest === null || m.timestamp < oldest) oldest = m.timestamp;
+    if (m.lastAttemptAt !== null && (lastAttemptAt === null || m.lastAttemptAt > lastAttemptAt)) {
+      lastAttemptAt = m.lastAttemptAt;
+    }
+    totalAttempts += m.attemptCount;
+    if (m.attemptCount > maxAttempts) maxAttempts = m.attemptCount;
     byRecipient[m.recipientId] = (byRecipient[m.recipientId] ?? 0) + 1;
   }
-  return { total: rows.length, oldestPendingTs: oldest, byRecipient };
+  return { total: rows.length, oldestPendingTs: oldest, lastAttemptAt, totalAttempts, maxAttempts, byRecipient };
 }
 
 /** An in-memory PendingQueueStore for tests and quick spikes. */

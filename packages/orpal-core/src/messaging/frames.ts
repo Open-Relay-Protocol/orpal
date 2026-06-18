@@ -80,7 +80,43 @@ export interface FileDoneFrame {
   fileId: string;
 }
 
-export type AppFrame = TextFrame | AckFrame | FileOfferFrame | FileChunkFrame | FileDoneFrame;
+/** Tag for the only sealed-box construction we use (orp.ts `seal`). */
+export const SEAL_ALG = "orp-sealedbox-v1" as const;
+
+/**
+ * A recipient-sealed envelope (issue #23).
+ *
+ * The inner app frame (a {@link TextFrame} or {@link FileOfferFrame}) is
+ * serialized and sealed to the recipient's PINNED X25519 transport key — the one
+ * carried in their out-of-band-verified contact card — with the ORP anonymous
+ * sealed box (orp.ts `seal`). Only the holder of that transport private key can
+ * open it, so a wrong-key / fake-peer connection can never read the contents.
+ * The data channel is already end-to-end encrypted by the SecureChannel; this
+ * layer additionally binds every user payload to the verified identity, which is
+ * the anti-substitution guarantee the contact card promises.
+ *
+ * `awk`, `file-chunk` and `file-done` are deliberately NOT sealed: an awk carries
+ * only a message id (no content) and the acknowledging side may not hold the
+ * sender's transport key to seal one back; file chunks ride the already-encrypted
+ * SecureChannel and are bound to a sealed offer by `fileId`. See
+ * messaging/sealed.ts for the seal/open helpers.
+ */
+export interface SealedFrame {
+  v: 1;
+  t: "sealed";
+  /** Sealed-box algorithm tag, so the wire format can evolve. */
+  alg: typeof SEAL_ALG;
+  /** b64u of `seal(utf8(JSON(innerFrame)), recipientTransportPub)`. */
+  box: string;
+}
+
+export type AppFrame =
+  | TextFrame
+  | AckFrame
+  | FileOfferFrame
+  | FileChunkFrame
+  | FileDoneFrame
+  | SealedFrame;
 
 export function encodeAppFrame(frame: AppFrame): string {
   return JSON.stringify(frame);
@@ -142,6 +178,11 @@ export function decodeAppFrame(text: string): AppFrame | null {
     case "file-done":
       if (typeof f.fileId === "string") {
         return { v: 1, t: "file-done", fileId: f.fileId };
+      }
+      return null;
+    case "sealed":
+      if (f.alg === SEAL_ALG && typeof f.box === "string") {
+        return { v: 1, t: "sealed", alg: SEAL_ALG, box: f.box };
       }
       return null;
     default:

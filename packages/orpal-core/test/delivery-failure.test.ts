@@ -12,6 +12,7 @@ import {
 } from "../src/index.js";
 import { MockBoard } from "./helpers/mock-board.js";
 import { once, waitFor } from "./helpers/wait.js";
+import { link } from "./helpers/link.js";
 
 let live: OrpalClient[] = [];
 afterEach(() => {
@@ -62,6 +63,7 @@ describe("delivery failure handling", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await link(a, b);
 
     await a.connect(b.identityKey);
     await waitFor(() => a.contactState(b.identityKey) === "connected");
@@ -88,6 +90,7 @@ describe("delivery failure handling", () => {
     const b = client({ connectTimeoutMs: 400 }, board, network);
     live = [a, b];
     await a.start();
+    await link(a, b); // A pins B's transport key (B's card works before B starts)
     // B is NOT online yet.
 
     const firstFailed = once(

@@ -14,7 +14,8 @@ export function Sidebar(props: {
   onAddContact: () => void;
   onSettings: () => void;
 }) {
-  const { conversations, selected, select, connectionOf, brokerState, identityKey } = useOrpal();
+  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics } =
+    useOrpal();
 
   return (
     <aside className="sidebar">
@@ -35,6 +36,20 @@ export function Sidebar(props: {
         <div className={`broker broker-${brokerState}`} title={identityKey}>
           <span className="dot" /> {BROKER_LABEL[brokerState] ?? brokerState}
         </div>
+        {pendingMetrics.total > 0 && (
+          <div
+            className="queue-status"
+            title={
+              `${pendingMetrics.total} message(s) waiting for an acknowledgement` +
+              `\noldest queued: ${formatAge(pendingMetrics.oldestPendingTs)}` +
+              `\nlast attempt: ${formatAge(pendingMetrics.lastAttemptAt)}` +
+              `\ndelivery attempts: ${pendingMetrics.totalAttempts}`
+            }
+          >
+            <span className="queue-dot" />
+            {pendingMetrics.total} queued · oldest {formatAge(pendingMetrics.oldestPendingTs)}
+          </div>
+        )}
       </header>
 
       <div className="sidebar-actions">
@@ -76,6 +91,18 @@ export function Sidebar(props: {
       </footer>
     </aside>
   );
+}
+
+/** A compact "Xs / Xm / Xh ago" for a queue timestamp (null → em dash). */
+function formatAge(ts: number | null): string {
+  if (ts === null) return "—";
+  const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
 }
 
 function presenceLabel(state: string): string {

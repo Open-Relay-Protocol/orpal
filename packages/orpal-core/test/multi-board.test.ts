@@ -9,6 +9,7 @@ import {
 } from "../src/index.js";
 import { MockBoard } from "./helpers/mock-board.js";
 import { once } from "./helpers/wait.js";
+import { linkBoth } from "./helpers/link.js";
 
 let live: OrpalClient[] = [];
 afterEach(() => {
@@ -43,6 +44,7 @@ describe("multiple boards", () => {
     live = [a, b];
     await a.start();
     await b.start();
+    await linkBoth(a, b);
 
     const got = once(b.events, "message", (e) => e.message.text === "hi via board2");
     const delivered = once(
