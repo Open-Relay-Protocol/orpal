@@ -11,6 +11,7 @@ import {
 import { DEFAULT_SETTINGS, type AppSettings } from "@shared/ipc";
 import {
   IpcConversationStore,
+  IpcPendingQueueStore,
   IpcSecureKeyStore,
   createIncomingFileSink,
 } from "./bridge-stores.js";
@@ -48,6 +49,9 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   const orpal = new OrpalClient({
     identity,
     store: new IpcConversationStore(),
+    // Durably queue messages to offline contacts and retry until acknowledged
+    // (issue #11). Persisted in IndexedDB, so retries resume after a reload.
+    pendingQueue: new IpcPendingQueueStore(),
     boards,
     iceServers: settings.iceServers,
     relayOnlyByDefault: settings.relayOnlyByDefault,

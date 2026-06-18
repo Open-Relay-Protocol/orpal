@@ -22,6 +22,34 @@ export interface TextFrame {
   ts: number;
 }
 
+/**
+ * Application-level acknowledgement ("awk") of a delivered message.
+ *
+ * The ReliableChannel's §11 one-time-key ACK only proves a frame reached the
+ * peer's channel layer — it says nothing about the app having durably accepted
+ * the message. For offline/store-and-forward delivery (see pending-queue.ts) the
+ * SENDER keeps a message queued and retrying until the RECIPIENT confirms it has
+ * stored the message by sending this awk back over the same channel.
+ *
+ * Contract (sender ⇄ recipient must agree):
+ *   - On receiving a `text` frame with id X, a recipient stores it and replies
+ *     with `{ v: 1, t: "awk", id: X, ts: <now> }`.
+ *   - awks are idempotent: a recipient that receives the same `id` again (a
+ *     retry, because an earlier awk was lost) re-sends the awk and does NOT
+ *     re-store the message.
+ *   - On receiving an awk for id X, the sender removes X from its pending queue
+ *     and marks it delivered locally. An awk for an unknown id is ignored.
+ *   - awks are never themselves acked (no awk-of-an-awk).
+ */
+export interface AckFrame {
+  v: 1;
+  t: "awk";
+  /** The app-level message id being acknowledged (matches the TextFrame.id). */
+  id: string;
+  /** Epoch-ms the recipient acknowledged at, for sender-side observability. */
+  ts: number;
+}
+
 export interface FileOfferFrame {
   v: 1;
   t: "file-offer";
@@ -52,7 +80,7 @@ export interface FileDoneFrame {
   fileId: string;
 }
 
-export type AppFrame = TextFrame | FileOfferFrame | FileChunkFrame | FileDoneFrame;
+export type AppFrame = TextFrame | AckFrame | FileOfferFrame | FileChunkFrame | FileDoneFrame;
 
 export function encodeAppFrame(frame: AppFrame): string {
   return JSON.stringify(frame);
@@ -74,6 +102,11 @@ export function decodeAppFrame(text: string): AppFrame | null {
     case "text":
       if (typeof f.id === "string" && typeof f.text === "string" && typeof f.ts === "number") {
         return { v: 1, t: "text", id: f.id, text: f.text, ts: f.ts };
+      }
+      return null;
+    case "awk":
+      if (typeof f.id === "string" && typeof f.ts === "number") {
+        return { v: 1, t: "awk", id: f.id, ts: f.ts };
       }
       return null;
     case "file-offer":

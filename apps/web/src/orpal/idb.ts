@@ -3,11 +3,12 @@
 // reasonably-sized, origin-scoped store available in every modern browser.
 
 export const DB_NAME = "orpal";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const STORE_KV = "kv"; // misc key/value (private keys)
 export const STORE_CONTACTS = "contacts"; // keyPath: identityKey
 export const STORE_MESSAGES = "messages"; // keyPath: id, index: contactKey
+export const STORE_PENDING = "pending"; // keyPath: messageId (offline send queue)
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -24,6 +25,10 @@ export function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_MESSAGES)) {
         const msgs = db.createObjectStore(STORE_MESSAGES, { keyPath: "id" });
         msgs.createIndex("contactKey", "contactKey", { unique: false });
+      }
+      // v2: the offline pending-queue (outbound messages awaiting an awk).
+      if (!db.objectStoreNames.contains(STORE_PENDING)) {
+        db.createObjectStore(STORE_PENDING, { keyPath: "messageId" });
       }
     };
     req.onsuccess = () => resolve(req.result);

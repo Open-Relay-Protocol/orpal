@@ -11,6 +11,8 @@ import type {
   StoredKeys,
   StoredMessage,
   ListMessagesOptions,
+  PendingMessage,
+  PendingPatch,
 } from "@orpal/core";
 
 /** A STUN/TURN server entry. Structurally compatible with the DOM's
@@ -69,6 +71,17 @@ export interface OrpalBridge {
     appendMessage(message: StoredMessage): Promise<void>;
     updateMessage(id: string, patch: MessagePatch): Promise<void>;
     listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;
+  };
+  /** Durable offline send-queue (IndexedDB in the browser shell): outbound
+   *  messages persisted until the recipient acknowledges (see @orpal/core's
+   *  PendingQueueStore). Survives reloads so retries resume on restart. */
+  pending: {
+    init(): Promise<void>;
+    enqueue(msg: PendingMessage): Promise<void>;
+    update(messageId: string, patch: PendingPatch): Promise<void>;
+    remove(messageId: string): Promise<void>;
+    get(messageId: string): Promise<PendingMessage | null>;
+    list(): Promise<PendingMessage[]>;
   };
   /** Streaming file I/O for transfers — bytes are never buffered whole in memory. */
   files: {

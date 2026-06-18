@@ -70,14 +70,23 @@ The same codebase ships two ways from one shared, framework-agnostic core:
   delivery state (sending → **delivered** via the §11 one-time-key ACK, or
   **failed/retry** on `DeliveryTimeoutError`). History is persisted locally in the
   browser (**IndexedDB**).
+- **Offline send queue** — messages to an offline contact are persisted to a
+  durable local **pending queue** (IndexedDB) and retried until the recipient
+  confirms receipt with an app-level **acknowledgement** (`awk`) frame. Delivery
+  prefers **presence** (deliver the instant the contact reconnects) and falls back
+  to **blind retry** (exponential backoff with jitter); the queue survives reloads
+  and restarts, and a delivered message is removed once its `awk` arrives. Local
+  metrics (pending count + oldest-pending timestamp) aid debugging.
 - **File transfer** — chunked, header-framed (id, name, size, mime, chunk
   index/total, per-file SHA-256), ACK-gated **backpressure** with a sliding window,
   app-level idempotency, and **reassembly + integrity verification**. Sending
   streams straight off the source file; an incoming file reassembles in memory and
   is then offered as a **download** (the web has no unprompted streaming-to-disk).
-- **Honest offline UX** — no store-and-forward: a contact shows offline when a
-  match can't be made, undeliverable messages are marked failed, and rendezvous is
-  re-initiated automatically on broker reconnect.
+- **Honest offline UX** — the relay still has no store-and-forward: a contact
+  shows offline when a match can't be made, and rendezvous is re-initiated
+  automatically on broker reconnect. Outbound messages aren't lost, though — they
+  sit in the client-side **offline send queue** above and deliver once the contact
+  returns (the board never holds them).
 
 ## Platforms
 
@@ -283,6 +292,11 @@ The suites cover:
   full end-to-end transfer between two `OrpalClient`s.
 - **`delivery-failure`** — offline contact → failed; ACK timeout →
   `DeliveryTimeoutError` → failed; retry-after-reachable succeeds.
+- **`offline-queue`** — the offline send queue: a message to an offline contact is
+  persisted (not failed), retried with exponential backoff, delivered on presence,
+  and removed from the queue once its `awk` arrives; it also survives a simulated
+  reload (a restarted client resumes and delivers), plus unit checks on the
+  delivery worker's backoff schedule and the pending-queue metrics.
 - **`integration-board`** *(opt-in)* — the same round-trip through the **real**
   reference board over real WebSockets. Run with a board up:
   `ORP_BOARD_URL=ws://127.0.0.1:8080/ npx vitest run test/integration-board.test.ts`
