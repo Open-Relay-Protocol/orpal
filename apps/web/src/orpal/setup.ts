@@ -11,6 +11,7 @@ import {
 import { DEFAULT_SETTINGS, type AppSettings } from "@shared/ipc";
 import {
   IpcConversationStore,
+  IpcMigrationStore,
   IpcPendingQueueStore,
   IpcSecureKeyStore,
   createIncomingFileSink,
@@ -27,7 +28,8 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   const settings = await window.orpal.settings.get();
 
   // Load the identity from the OS keychain, or generate + persist one on first run.
-  const { identity, created } = await IdentityManager.loadOrCreate(new IpcSecureKeyStore());
+  const keyStore = new IpcSecureKeyStore();
+  const { identity, created } = await IdentityManager.loadOrCreate(keyStore);
 
   // Each board needs to call back into OrpalClient on (re)connect; OrpalClient
   // needs the boards at construction. Resolve the cycle with a forward ref.
@@ -56,6 +58,8 @@ export async function createOrpalApp(): Promise<OrpalApp> {
     iceServers: settings.iceServers,
     relayOnlyByDefault: settings.relayOnlyByDefault,
     createFileSink: (offer) => createIncomingFileSink(offer),
+    migrationStore: new IpcMigrationStore(),
+    keyStore,
   });
   app = orpal;
 

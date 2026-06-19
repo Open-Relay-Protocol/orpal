@@ -77,6 +77,20 @@ export type {
   PendingInfo,
 } from "../vendor/orp/client/reliablechannel.js";
 
+// ---- core: identity rotation (ORP-004) --------------------------------------
+export {
+  makeKeyMigration,
+  makeMigrationAck,
+  verifyKeyMigration,
+  verifyMigrationAck,
+  MigrationRegistry,
+} from "../vendor/orp/core/migration.js";
+export type {
+  KeyMigration,
+  MigrationAck,
+  MigrationVerification,
+} from "../vendor/orp/core/migration.js";
+
 // ---- client: inner secure message channel + WebRTC interface ----------------
 export { SecureChannel } from "../vendor/orp/client/securechannel.js";
 export type {

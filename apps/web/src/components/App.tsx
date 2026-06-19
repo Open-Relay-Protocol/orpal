@@ -5,11 +5,18 @@ import { Conversation } from "./Conversation.js";
 import { IdentityModal } from "./IdentityModal.js";
 import { AddContactModal } from "./AddContactModal.js";
 import { SettingsModal } from "./SettingsModal.js";
+import { MigrationWizardModal } from "./MigrationWizardModal.js";
+import { MigrationPromptModal } from "./MigrationPromptModal.js";
 import { CrabMascot } from "./CrabMascot.js";
 
 function Shell() {
-  const { status, errorMsg, selected } = useOrpal();
-  const [modal, setModal] = useState<null | "identity" | "add" | "settings">(null);
+  const { status, errorMsg, selected, pendingIncomingMigrations } = useOrpal();
+  const [modal, setModal] = useState<null | "identity" | "add" | "settings" | "migration">(null);
+  const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(new Set());
+
+  const activePrompt = pendingIncomingMigrations.find(
+    (p) => !dismissedPrompts.has(p.contactKey),
+  );
 
   if (status === "loading") {
     return <div className="center muted">Starting Orpal…</div>;
@@ -35,11 +42,21 @@ function Shell() {
         onShowIdentity={() => setModal("identity")}
         onAddContact={() => setModal("add")}
         onSettings={() => setModal("settings")}
+        onMigration={() => setModal("migration")}
       />
       <Conversation />
       {modal === "identity" && <IdentityModal onClose={() => setModal(null)} />}
       {modal === "add" && <AddContactModal onClose={() => setModal(null)} />}
       {modal === "settings" && <SettingsModal onClose={() => setModal(null)} />}
+      {modal === "migration" && <MigrationWizardModal onClose={() => setModal(null)} />}
+      {!modal && activePrompt && (
+        <MigrationPromptModal
+          pending={activePrompt}
+          onClose={() =>
+            setDismissedPrompts((prev) => new Set([...prev, activePrompt.contactKey]))
+          }
+        />
+      )}
     </div>
   );
 }

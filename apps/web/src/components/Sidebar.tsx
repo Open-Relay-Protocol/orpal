@@ -13,8 +13,9 @@ export function Sidebar(props: {
   onShowIdentity: () => void;
   onAddContact: () => void;
   onSettings: () => void;
+  onMigration: () => void;
 }) {
-  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics } =
+  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress } =
     useOrpal();
 
   return (
@@ -56,6 +57,9 @@ export function Sidebar(props: {
         <button onClick={props.onShowIdentity}>My identity / QR</button>
         <button onClick={props.onAddContact}>Add contact</button>
         <button onClick={props.onSettings}>Settings</button>
+        <button onClick={props.onMigration}>
+          {migrationProgress ? "Migration in progress…" : "Rotate identity"}
+        </button>
       </div>
 
       <div className="convo-list">

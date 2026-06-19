@@ -16,6 +16,7 @@ export function Conversation() {
     connect,
     setRelayOnly,
     setContactBoards,
+    setAutoAcceptMigration,
     settings,
     select,
     brokerState,
@@ -92,27 +93,42 @@ export function Conversation() {
               relay-only
             </label>
           )}
-          {convo?.known && boards.length > 1 && (
+          {convo?.known && (
             <details className="board-routes">
-              <summary title="Choose which boards to reach this contact on (issue #19)">
-                boards{preferred.length ? ` · ${preferred.length}` : " · all"}
+              <summary title="Per-contact settings: board routing, auto-accept key rotations">
+                settings{preferred.length ? ` · ${preferred.length} boards` : ""}
               </summary>
               <div className="board-routes-menu">
-                <div className="board-routes-hint muted">
-                  {preferred.length === 0
-                    ? "Using all boards. Pick specific boards to route only over them."
-                    : "Only the checked boards are used to reach this contact."}
+                {boards.length > 1 && (
+                  <>
+                    <div className="board-routes-hint muted">
+                      {preferred.length === 0
+                        ? "Using all boards. Pick specific boards to route only over them."
+                        : "Only the checked boards are used to reach this contact."}
+                    </div>
+                    {boards.map((url) => (
+                      <label key={url} className="board-route">
+                        <input
+                          type="checkbox"
+                          checked={preferred.includes(url)}
+                          onChange={(e) => toggleBoard(url, e.target.checked)}
+                        />
+                        <span className="board-route-url">{url}</span>
+                      </label>
+                    ))}
+                  </>
+                )}
+                <div className="board-routes-hint muted" style={{ marginTop: boards.length > 1 ? "8px" : undefined }}>
+                  Key rotation
                 </div>
-                {boards.map((url) => (
-                  <label key={url} className="board-route">
-                    <input
-                      type="checkbox"
-                      checked={preferred.includes(url)}
-                      onChange={(e) => toggleBoard(url, e.target.checked)}
-                    />
-                    <span className="board-route-url">{url}</span>
-                  </label>
-                ))}
+                <label className="board-route">
+                  <input
+                    type="checkbox"
+                    checked={contact?.autoAcceptMigration ?? false}
+                    onChange={(e) => void setAutoAcceptMigration(selected, e.target.checked)}
+                  />
+                  <span className="board-route-url">Auto-accept key rotations</span>
+                </label>
               </div>
             </details>
           )}
