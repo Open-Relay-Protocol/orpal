@@ -62,8 +62,11 @@ The same codebase ships two ways from one shared, framework-agnostic core:
   (`BrowserRendezvousBroker`) that (de)serializes the SPEC §4.4 envelope with
   automatic reconnect/backoff.
 - **Identity & contacts** — generate or load your keypairs via `DeviceIdentity`;
-  private keys live in the browser's **IndexedDB** (origin-scoped; see the
-  [security caveat](#security)). Your identity renders as a **QR code**; contacts
+  private keys are sealed to the device's **secure hardware** when available
+  (Secure Enclave / Android Keystore-StrongBox / Windows TPM, reached via a
+  WebAuthn platform authenticator), falling back to origin-scoped **IndexedDB**
+  where it isn't (ORPAL-007; see the [security caveat](#security)). Your identity
+  renders as a **QR code**; contacts
   import by **scanning** (webcam + jsQR) or **pasting**, with full binding
   validation (anti-substitution).
 - **Per-contact board routing** — each contact can carry its own **board routes**
@@ -106,7 +109,7 @@ Both shells run the **same** React UI + orpal-core and back the same typed
 
 | Capability      | Web (PWA) & native Android                  |
 | --------------- | ------------------------------------------- |
-| Private keys    | IndexedDB *(origin-scoped, not OS-grade)*   |
+| Private keys    | secure hardware when present (Secure Enclave / Keystore-StrongBox / TPM via WebAuthn), else IndexedDB |
 | History         | IndexedDB                                   |
 | Send a file     | file picker, read via `Blob.slice`          |
 | Receive a file  | reassembled in memory, then **downloaded**  |
@@ -167,9 +170,11 @@ server, fully self-contained. The WebView's native `RTCPeerConnection` + `WebSoc
 back the same `BrowserWebRTCEndpoint`/`BrowserRendezvousBroker`, so orpal-core runs
 **unmodified**; only the packaging differs from the PWA.
 
-> Private keys on Android currently live in the WebView's IndexedDB (origin-scoped,
-> like the PWA) — **not** the OS Keystore yet. See the [roadmap](#roadmap) for
-> moving key storage and history onto Capacitor secure-storage plugins.
+> On Android, private keys are sealed to the OS **Keystore/StrongBox** when the
+> WebView exposes a WebAuthn platform authenticator (ORPAL-007), and otherwise fall
+> back to the WebView's IndexedDB (origin-scoped, like the PWA). History still lives
+> in IndexedDB; see the [roadmap](#roadmap) for moving it onto a Capacitor SQLite
+> plugin.
 
 **Option A — download a prebuilt APK from CI (no Android SDK needed).**
 Pushes to `master` run [`.github/workflows/build-android.yml`](.github/workflows/build-android.yml),
@@ -282,11 +287,16 @@ relay untrusted end-to-end:
 - The board is treated as fully untrusted. All of this lives in the reference
   `Client`, which Orpal drives **unmodified**.
 
-> **Key-storage caveat:** browsers (and the Android WebView) have no OS keychain, so
-> the app keeps private keys in IndexedDB — origin-scoped and not readable by other
-> sites, but **not** hardware/OS-protected. Use Orpal on a trusted origin (the
-> official deployment or one you control). Moving Android onto the OS **Keystore**
-> for hardware-grade key protection is on the [roadmap](#roadmap).
+> **Key-storage caveat:** browsers have no direct OS-keychain API, but they do
+> reach the same secure hardware through a **WebAuthn platform authenticator**.
+> When one is present (Apple Secure Enclave, Android Keystore/StrongBox, or a
+> Windows TPM via Windows Hello), Orpal derives a wrapping key *inside* that secure
+> element using the WebAuthn **PRF** extension and seals the private keys with it
+> before they touch IndexedDB — so the at-rest copy is hardware-bound ciphertext
+> (ORPAL-007). Where no such authenticator exists, it falls back to keeping the
+> keys in IndexedDB — origin-scoped and not readable by other sites, but **not**
+> hardware-protected — so use Orpal on a trusted origin (the official deployment or
+> one you control) in that case.
 
 **Reporting a vulnerability:** please do **not** open a public issue for security
 problems. Instead, report privately via GitHub's [Security
@@ -337,11 +347,13 @@ bundles the web renderer into an installable APK (see [Android](#android-native-
 alongside the **PWA**, which installs from any modern browser on desktop or Android.
 Both reuse the renderer verbatim and only swap `window.orpal`.
 
-The Android shell currently reuses the **browser** `window.orpal` (IndexedDB keys +
-history, in-memory file handling) as-is in the WebView. The next steps harden it into
-a first-class native app: swap the browser-backed `SecureKeyStore`/`ConversationStore`/
-file sinks for Capacitor plugins (Android **Keystore** secure storage, Capacitor
-SQLite, Filesystem) for OS-grade key storage and streamed-to-disk transfers, wire the
+The Android shell currently reuses the **browser** `window.orpal` (IndexedDB
+history, in-memory file handling) as-is in the WebView; private keys are already
+sealed to secure hardware via WebAuthn when the device supports it (ORPAL-007). The
+next steps harden the rest into a first-class native app: swap the browser-backed
+`ConversationStore`/file sinks for Capacitor plugins (Capacitor SQLite, Filesystem)
+for streamed-to-disk transfers, optionally add a native Keystore-plugin
+`HardwareKeyProvider` as a non-WebAuthn fallback, wire the
 **camera** permission for in-app QR scanning (the `CAMERA` permission is already
 declared; pasting the card is the fallback today), and add an **iOS** target the same
 way. The same React UI and the WebView's native `RTCPeerConnection` + `WebSocket`

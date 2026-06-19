@@ -17,16 +17,21 @@
 // as a PWA on desktop and Android. (A future Capacitor/Android shell would back
 // the same contract with native plugins.)
 //
-// SECURITY NOTE: a browser has no OS keychain. Private keys live in IndexedDB,
-// which is origin-scoped and not readable by other sites, but is NOT
-// hardware/OS-protected. Treat the web build as convenient-and-portable, and only
-// use it on a trusted origin you control (or the official deployment).
+// SECURITY NOTE: a browser has no OS keychain. By default private keys live in
+// IndexedDB, which is origin-scoped and not readable by other sites, but is NOT
+// hardware/OS-protected. When the device exposes a WebAuthn platform
+// authenticator (ORPAL-007), the keys are instead sealed to its secure element —
+// Secure Enclave / Android Keystore-StrongBox / Windows TPM — before they touch
+// IndexedDB (see webauthn-keystore.ts + HardwareBackedKeyStore in core); the
+// IndexedDB slot then holds only hardware-bound ciphertext. Where no such
+// hardware exists this falls back to the cleartext slot, so treat that case as
+// convenient-and-portable and only use it on a trusted origin you control.
 
 import { sha256 } from "@noble/hashes/sha2";
 import { bytesToHex } from "@noble/hashes/utils";
 import type {
   Contact,
-  StoredKeys,
+  PersistedKeys,
   StoredMessage,
   ListMessagesOptions,
   PendingMessage,
@@ -163,7 +168,7 @@ async function loadSettings(): Promise<AppSettings> {
 
 const bridge: OrpalBridge = {
   keys: {
-    load: () => kvGet<StoredKeys>(KEYS_KV),
+    load: () => kvGet<PersistedKeys>(KEYS_KV),
     save: (k) => kvSet(KEYS_KV, k),
     clear: () => kvDelete(KEYS_KV),
   },
