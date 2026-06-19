@@ -4,6 +4,7 @@
 
 import {
   BrowserRendezvousBroker,
+  HardwareBackedKeyStore,
   IdentityManager,
   OrpalClient,
   type DeviceIdentity,
@@ -11,11 +12,12 @@ import {
 import { DEFAULT_SETTINGS, type AppSettings } from "@shared/ipc";
 import {
   IpcConversationStore,
+  IpcKeyBlobStore,
   IpcMigrationStore,
   IpcPendingQueueStore,
-  IpcSecureKeyStore,
   createIncomingFileSink,
 } from "./bridge-stores.js";
+import { createHardwareKeyProvider } from "./webauthn-keystore.js";
 
 export interface OrpalApp {
   orpal: OrpalClient;
@@ -27,8 +29,17 @@ export interface OrpalApp {
 export async function createOrpalApp(): Promise<OrpalApp> {
   const settings = await window.orpal.settings.get();
 
-  // Load the identity from the OS keychain, or generate + persist one on first run.
-  const keyStore = new IpcSecureKeyStore();
+  // Load the identity from secure storage, or generate + persist one on first run.
+  // ORPAL-007: when the device exposes a WebAuthn platform authenticator, seal the
+  // keys to its secure element (Secure Enclave / Android Keystore-StrongBox / TPM);
+  // otherwise HardwareBackedKeyStore falls back to the cleartext IndexedDB slot.
+  // The keyStore stays a plain SecureKeyStore, so OrpalClient/IdentityManager are
+  // unchanged either way.
+  const hardwareProvider = await createHardwareKeyProvider();
+  const keyStore = new HardwareBackedKeyStore(new IpcKeyBlobStore(), hardwareProvider, (err) =>
+    // eslint-disable-next-line no-console
+    console.warn("[orpal] secure-hardware key sealing unavailable; stored in cleartext", err),
+  );
   const { identity, created } = await IdentityManager.loadOrCreate(keyStore);
 
   // Each board needs to call back into OrpalClient on (re)connect; OrpalClient

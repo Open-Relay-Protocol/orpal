@@ -9,12 +9,14 @@ import type {
   FileSink,
   FileSource,
   IncomingFileSink,
+  KeyBlobStore,
   ListMessagesOptions,
   MigrationState,
   MigrationStore,
   PendingMessage,
   PendingPatch,
   PendingQueueStore,
+  PersistedKeys,
   SecureKeyStore,
   StoredKeys,
   StoredMessage,
@@ -24,13 +26,30 @@ import { kvGet, kvSet, kvDelete } from "./idb.js";
 
 const MIGRATION_KV = "migrationState";
 
-/** Private keys via the shell's secure storage (IndexedDB in the browser bridge). */
+/** Private keys via the shell's secure storage (IndexedDB in the browser bridge).
+ *  Used directly for the cleartext path; on a device with secure hardware it's the
+ *  inner slot of a {@link HardwareBackedKeyStore} (see IpcKeyBlobStore). */
 export class IpcSecureKeyStore implements SecureKeyStore {
   load(): Promise<StoredKeys | null> {
-    return window.orpal.keys.load();
+    return window.orpal.keys.load() as Promise<StoredKeys | null>;
   }
   save(keys: StoredKeys): Promise<void> {
     return window.orpal.keys.save(keys);
+  }
+  clear(): Promise<void> {
+    return window.orpal.keys.clear();
+  }
+}
+
+/** The raw key slot (cleartext keys OR a hardware-sealed envelope) backing
+ *  HardwareBackedKeyStore. Same IndexedDB slot as IpcSecureKeyStore, but typed
+ *  over the `PersistedKeys` union so it can hold either shape (ORPAL-007). */
+export class IpcKeyBlobStore implements KeyBlobStore {
+  load(): Promise<PersistedKeys | null> {
+    return window.orpal.keys.load();
+  }
+  save(value: PersistedKeys): Promise<void> {
+    return window.orpal.keys.save(value);
   }
   clear(): Promise<void> {
     return window.orpal.keys.clear();

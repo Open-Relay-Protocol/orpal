@@ -8,7 +8,7 @@
 
 import type {
   Contact,
-  StoredKeys,
+  PersistedKeys,
   StoredMessage,
   ListMessagesOptions,
   PendingMessage,
@@ -55,10 +55,14 @@ export type MessagePatch = Partial<Pick<StoredMessage, "state" | "text" | "file"
 
 /** The full surface exposed to the UI as `window.orpal`. */
 export interface OrpalBridge {
-  /** Private key storage (IndexedDB in the browser shell). */
+  /** Private key storage (IndexedDB in the browser shell). The stored value is a
+   *  `PersistedKeys`: either cleartext `StoredKeys`, or — when secure hardware is
+   *  available (ORPAL-007) — a `SecureEnvelope` sealed to the device's secure
+   *  element. The slot is opaque to this surface; `HardwareBackedKeyStore` in
+   *  core decides which shape to write. */
   keys: {
-    load(): Promise<StoredKeys | null>;
-    save(keys: StoredKeys): Promise<void>;
+    load(): Promise<PersistedKeys | null>;
+    save(keys: PersistedKeys): Promise<void>;
     clear(): Promise<void>;
   };
   /** Local conversation history (IndexedDB in the browser shell). */
