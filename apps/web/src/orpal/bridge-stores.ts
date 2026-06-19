@@ -10,6 +10,8 @@ import type {
   FileSource,
   IncomingFileSink,
   ListMessagesOptions,
+  MigrationState,
+  MigrationStore,
   PendingMessage,
   PendingPatch,
   PendingQueueStore,
@@ -18,6 +20,9 @@ import type {
   StoredMessage,
 } from "@orpal/core";
 import type { FilePick, MessagePatch } from "@shared/ipc";
+import { kvGet, kvSet, kvDelete } from "./idb.js";
+
+const MIGRATION_KV = "migrationState";
 
 /** Private keys via the shell's secure storage (IndexedDB in the browser bridge). */
 export class IpcSecureKeyStore implements SecureKeyStore {
@@ -105,4 +110,18 @@ export async function createIncomingFileSink(offer: FileOfferFrame): Promise<Inc
     abort: () => window.orpal.files.abortWrite(handle.handleId),
   };
   return { sink, path: handle.path };
+}
+
+/** Durable migration state via the KV store (IndexedDB). Survives restarts so a
+ *  migration in progress resumes where it left off. */
+export class IpcMigrationStore implements MigrationStore {
+  async load(): Promise<MigrationState | null> {
+    return kvGet<MigrationState>(MIGRATION_KV);
+  }
+  async save(state: MigrationState): Promise<void> {
+    await kvSet(MIGRATION_KV, state);
+  }
+  async clear(): Promise<void> {
+    await kvDelete(MIGRATION_KV);
+  }
 }

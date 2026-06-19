@@ -110,13 +110,32 @@ export interface SealedFrame {
   box: string;
 }
 
+/** Wraps an ORP-004 key_migration record, sent over an existing channel to
+ *  notify a contact of an identity rotation. */
+export interface KeyMigrationFrame {
+  v: 1;
+  t: "key-migration";
+  /** The full ORP-004 key_migration record (double-signed). */
+  migration: Record<string, unknown>;
+}
+
+/** Wraps an ORP-004 migration_ack, sent back after the recipient accepts. */
+export interface MigrationAckFrame {
+  v: 1;
+  t: "migration-ack";
+  /** The full ORP-004 migration_ack record (signed by recipient). */
+  ack: Record<string, unknown>;
+}
+
 export type AppFrame =
   | TextFrame
   | AckFrame
   | FileOfferFrame
   | FileChunkFrame
   | FileDoneFrame
-  | SealedFrame;
+  | SealedFrame
+  | KeyMigrationFrame
+  | MigrationAckFrame;
 
 export function encodeAppFrame(frame: AppFrame): string {
   return JSON.stringify(frame);
@@ -183,6 +202,16 @@ export function decodeAppFrame(text: string): AppFrame | null {
     case "sealed":
       if (f.alg === SEAL_ALG && typeof f.box === "string") {
         return { v: 1, t: "sealed", alg: SEAL_ALG, box: f.box };
+      }
+      return null;
+    case "key-migration":
+      if (typeof f.migration === "object" && f.migration !== null) {
+        return { v: 1, t: "key-migration", migration: f.migration as Record<string, unknown> };
+      }
+      return null;
+    case "migration-ack":
+      if (typeof f.ack === "object" && f.ack !== null) {
+        return { v: 1, t: "migration-ack", ack: f.ack as Record<string, unknown> };
       }
       return null;
     default:

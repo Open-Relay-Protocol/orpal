@@ -28,6 +28,7 @@ export * from "./messaging/sealed.js";
 export * from "./messaging/orpal-client.js";
 export * from "./messaging/pending-queue.js";
 export * from "./messaging/delivery-worker.js";
+export * from "./messaging/migration-manager.js";
 export * from "./transfer/file-transfer.js";
 
 // Utilities.

@@ -12,7 +12,9 @@ import {
   shortKey,
   type Contact,
   type ContactState,
+  type MigrationProgress,
   type OrpalClient,
+  type PendingMigration,
   type PendingMetrics,
   type StoredMessage,
 } from "@orpal/core";
@@ -61,6 +63,13 @@ interface OrpalContextValue {
   setContactBoards: (key: string, preferredBoards: string[]) => Promise<void>;
   saveSettings: (s: AppSettings) => Promise<void>;
   reveal: (path: string) => void;
+
+  migrationProgress: MigrationProgress | null;
+  pendingIncomingMigrations: readonly PendingMigration[];
+  startMigration: (retireAfterUtc: string) => Promise<void>;
+  retireMigration: () => Promise<void>;
+  acceptMigration: (contactKey: string) => Promise<boolean>;
+  declineMigration: (contactKey: string) => void;
 }
 
 const EMPTY_METRICS: PendingMetrics = {
@@ -96,6 +105,8 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [pendingMetrics, setPendingMetrics] = useState<PendingMetrics>(EMPTY_METRICS);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsNeedRestart, setSettingsNeedRestart] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
+  const [pendingIncomingMigrations, setPendingIncomingMigrations] = useState<readonly PendingMigration[]>([]);
 
   const upsertMessage = useCallback((m: StoredMessage) => {
     setMessagesByContact((prev) => {
@@ -141,6 +152,14 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
           // eslint-disable-next-line no-console
           console.warn("[orpal]", context, error),
         );
+        // Migration (ORPAL-008): progress updates + incoming prompts.
+        app.orpal.events.on("migration-progress", ({ progress }) =>
+          setMigrationProgress(progress),
+        );
+        app.orpal.events.on("migration-incoming", () =>
+          setPendingIncomingMigrations([...app.orpal.pendingIncomingMigrations]),
+        );
+        setMigrationProgress(app.orpal.migrationProgress);
 
         setStatus("ready");
       } catch (err) {
@@ -246,6 +265,28 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     void window.orpal.files.reveal(path);
   }, []);
 
+  const startMigration = useCallback(async (retireAfterUtc: string) => {
+    await orpalRef.current?.startMigration(retireAfterUtc);
+    setMigrationProgress(orpalRef.current?.migrationProgress ?? null);
+  }, []);
+
+  const retireMigration = useCallback(async () => {
+    await orpalRef.current?.retireMigration();
+    setMigrationProgress(orpalRef.current?.migrationProgress ?? null);
+  }, []);
+
+  const acceptMigration = useCallback(async (contactKey: string) => {
+    const result = await orpalRef.current?.acceptMigration(contactKey);
+    setPendingIncomingMigrations([...(orpalRef.current?.pendingIncomingMigrations ?? [])]);
+    await refreshContacts();
+    return result ?? false;
+  }, [refreshContacts]);
+
+  const declineMigration = useCallback((contactKey: string) => {
+    orpalRef.current?.declineMigration(contactKey);
+    setPendingIncomingMigrations([...(orpalRef.current?.pendingIncomingMigrations ?? [])]);
+  }, []);
+
   const conversations = useMemo<Conversation[]>(() => {
     const byKey = new Map<string, Conversation>();
     for (const c of contacts) {
@@ -294,6 +335,12 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     setContactBoards,
     saveSettings,
     reveal,
+    migrationProgress,
+    pendingIncomingMigrations,
+    startMigration,
+    retireMigration,
+    acceptMigration,
+    declineMigration,
   };
 
   return <OrpalContext.Provider value={value}>{children}</OrpalContext.Provider>;
