@@ -126,7 +126,16 @@ export class HardwareBackedKeyStore implements SecureKeyStore {
   async load(): Promise<StoredKeys | null> {
     const stored = await this.slot.load();
     if (!stored) return null;
-    if (!isSecureEnvelope(stored)) return stored; // cleartext fallback path
+
+    if (!isSecureEnvelope(stored)) {
+      // Cleartext: either a hardware-less device, or an install that predates
+      // ORPAL-007 whose keys were written before a provider existed. If secure
+      // hardware is available now, opportunistically re-seal so existing installs
+      // stop leaving keys in cleartext — without this, an upgraded user's keys
+      // would never migrate (loadOrCreate returns early on the first load).
+      await this.resealIfPossible(stored);
+      return stored;
+    }
 
     if (!this.provider) {
       throw new Error(
@@ -136,6 +145,20 @@ export class HardwareBackedKeyStore implements SecureKeyStore {
     const sealed = b64uDecode(stored.blob);
     const plaintext = await this.provider.unwrap(sealed);
     return JSON.parse(textDecoder.decode(plaintext)) as StoredKeys;
+  }
+
+  /** Best-effort upgrade of a cleartext slot to a hardware-sealed envelope.
+   *  Reuses `save` (which seals when the provider is available and otherwise
+   *  no-ops back to cleartext), and never throws into the load path — a failed
+   *  reseal just leaves the existing cleartext value and is retried next load. */
+  private async resealIfPossible(keys: StoredKeys): Promise<void> {
+    if (!this.provider) return;
+    try {
+      if (!(await this.provider.isAvailable())) return;
+      await this.save(keys);
+    } catch (err) {
+      this.onFallback?.(err);
+    }
   }
 
   async save(keys: StoredKeys): Promise<void> {

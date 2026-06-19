@@ -117,6 +117,51 @@ describe("HardwareBackedKeyStore — fallback path", () => {
     expect(await store.load()).toEqual(SAMPLE);
   });
 
+  it("re-seals a pre-existing cleartext slot on load when hardware is available", async () => {
+    // Simulate an install that predates ORPAL-007: cleartext keys already at rest.
+    const slot = new MemoryBlobStore();
+    slot.value = { ...SAMPLE };
+
+    const hw = new FakeHardwareProvider();
+    const store = new HardwareBackedKeyStore(slot, hw);
+
+    // Loading still returns the right keys...
+    expect(await store.load()).toEqual(SAMPLE);
+    // ...and as a side effect the at-rest copy is upgraded to a sealed envelope.
+    expect(hw.wrapCalls).toBe(1);
+    expect(slot.value && isSecureEnvelope(slot.value)).toBe(true);
+    expect(JSON.stringify(slot.value)).not.toContain(SAMPLE.signingPrivB64u);
+
+    // A subsequent load goes through the envelope branch and does NOT re-seal again.
+    expect(await store.load()).toEqual(SAMPLE);
+    expect(hw.wrapCalls).toBe(1);
+  });
+
+  it("leaves a cleartext slot untouched on load when no hardware is available", async () => {
+    const slot = new MemoryBlobStore();
+    slot.value = { ...SAMPLE };
+    const hw = new FakeHardwareProvider();
+    hw.available = false;
+
+    const store = new HardwareBackedKeyStore(slot, hw);
+    expect(await store.load()).toEqual(SAMPLE);
+    expect(hw.wrapCalls).toBe(0);
+    expect(slot.value).toEqual(SAMPLE); // still cleartext, unchanged
+  });
+
+  it("returns the keys even if an opportunistic reseal throws on load", async () => {
+    const slot = new MemoryBlobStore();
+    slot.value = { ...SAMPLE };
+    const hw = new FakeHardwareProvider();
+    hw.wrap = vi.fn().mockRejectedValue(new Error("biometric prompt dismissed"));
+    const onFallback = vi.fn();
+
+    const store = new HardwareBackedKeyStore(slot, hw, onFallback);
+    expect(await store.load()).toEqual(SAMPLE);
+    expect(onFallback).toHaveBeenCalled();
+    expect(slot.value).toEqual(SAMPLE); // unchanged; will retry next load
+  });
+
   it("returns null for an empty slot", async () => {
     const store = new HardwareBackedKeyStore(new MemoryBlobStore(), new FakeHardwareProvider());
     expect(await store.load()).toBeNull();
