@@ -225,6 +225,8 @@ export class OrpalClient {
   private readonly contactTransportKey = new Map<string, string>();
   /** identityKey → per-contact board routing (issue #19); empty lists = all boards. */
   private readonly contactBoards = new Map<string, { preferred: string[]; fallback: string[] }>();
+  /** identityKey → auto-accept key rotations via challenge-response (ORPAL-008). */
+  private readonly contactAutoAcceptMigration = new Map<string, boolean>();
   /** Per-message-id serialization of state updates (see enqueueUpdate). */
   private readonly updateChains = new Map<string, Promise<void>>();
 
@@ -274,6 +276,7 @@ export class OrpalClient {
     for (const c of await this.store.listContacts()) {
       this.contactRelayOnly.set(c.identityKey, c.relayOnly);
       this.contactTransportKey.set(c.identityKey, c.transportKey);
+      this.contactAutoAcceptMigration.set(c.identityKey, c.autoAcceptMigration ?? false);
       this.rememberContactBoards(c);
     }
     if (this.pendingQueue) {
@@ -349,6 +352,7 @@ export class OrpalClient {
     await this.store.upsertContact(contact);
     this.contactRelayOnly.set(contact.identityKey, contact.relayOnly);
     this.contactTransportKey.set(contact.identityKey, contact.transportKey);
+    this.contactAutoAcceptMigration.set(contact.identityKey, contact.autoAcceptMigration ?? false);
     this.rememberContactBoards(contact);
     return { ok: true, contact };
   }
@@ -361,6 +365,7 @@ export class OrpalClient {
     await this.store.removeContact(identityKey);
     this.contactRelayOnly.delete(identityKey);
     this.contactTransportKey.delete(identityKey);
+    this.contactAutoAcceptMigration.delete(identityKey);
     this.contactBoards.delete(identityKey);
   }
 
@@ -418,6 +423,17 @@ export class OrpalClient {
     contact.relayOnly = relayOnly;
     await this.store.upsertContact(contact);
     this.contactRelayOnly.set(identityKey, relayOnly);
+  }
+
+  /** Toggle auto-accept for key rotations from a contact (ORPAL-008). When
+   *  enabled, incoming migrations are verified via challenge-response and accepted
+   *  automatically. When disabled, a manual confirmation prompt is shown. */
+  async setAutoAcceptMigration(identityKey: string, autoAccept: boolean): Promise<void> {
+    const contact = await this.store.getContact(identityKey);
+    if (!contact) return;
+    contact.autoAcceptMigration = autoAccept;
+    await this.store.upsertContact(contact);
+    this.contactAutoAcceptMigration.set(identityKey, autoAccept);
   }
 
   // ---- migration (ORPAL-008) ------------------------------------------------
@@ -1043,12 +1059,13 @@ export class OrpalClient {
           });
           return;
         }
-        // Auto-accept: send cryptographic challenges to both transport keys.
-        // If both come back, we know the same entity holds both keys and
-        // auto-accept without prompting the user.
+        // Auto-accept (per-contact setting): send cryptographic challenges to
+        // both transport keys. If both come back, we know the same entity holds
+        // both keys and auto-accept without prompting the user.
+        const autoAccept = this.contactAutoAcceptMigration.get(contactKey) ?? false;
         const oldTk = this.contactTransportKey.get(contactKey);
         const conn = this.connections.get(contactKey);
-        if (oldTk && conn && conn.state === "connected") {
+        if (autoAccept && oldTk && conn && conn.state === "connected") {
           const challenges = this.migration.createChallenges(contactKey, oldTk);
           if (challenges) {
             for (const c of challenges) {

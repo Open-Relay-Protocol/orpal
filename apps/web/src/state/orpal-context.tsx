@@ -70,6 +70,7 @@ interface OrpalContextValue {
   retireMigration: () => Promise<void>;
   acceptMigration: (contactKey: string) => Promise<boolean>;
   declineMigration: (contactKey: string) => void;
+  setAutoAcceptMigration: (key: string, value: boolean) => Promise<void>;
 }
 
 const EMPTY_METRICS: PendingMetrics = {
@@ -287,6 +288,14 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     setPendingIncomingMigrations([...(orpalRef.current?.pendingIncomingMigrations ?? [])]);
   }, []);
 
+  const setAutoAcceptMigration = useCallback(
+    async (key: string, value: boolean) => {
+      await orpalRef.current?.setAutoAcceptMigration(key, value);
+      await refreshContacts();
+    },
+    [refreshContacts],
+  );
+
   const conversations = useMemo<Conversation[]>(() => {
     const byKey = new Map<string, Conversation>();
     for (const c of contacts) {
@@ -341,6 +350,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     retireMigration,
     acceptMigration,
     declineMigration,
+    setAutoAcceptMigration,
   };
 
   return <OrpalContext.Provider value={value}>{children}</OrpalContext.Provider>;

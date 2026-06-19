@@ -54,13 +54,16 @@ describe("identity migration wizard (ORPAL-008)", () => {
     await b.start();
     await linkBoth(a, b);
 
+    // Enable auto-accept on B for A's key.
+    await b.setAutoAcceptMigration(a.identityKey, true);
+
     // Establish a connection.
     const bGot = once(b.events, "message", (e) => e.message.text === "setup");
     await a.sendText(b.identityKey, "setup");
     await bGot;
 
-    // A starts a migration. B should auto-verify via challenge-response and
-    // send back a migration_ack — no manual prompt needed.
+    // A starts a migration. B has auto-accept enabled, so it should verify
+    // via challenge-response and send back a migration_ack — no manual prompt.
     const ackReceived = once(
       a.events,
       "migration-progress",

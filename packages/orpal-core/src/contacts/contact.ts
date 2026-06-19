@@ -32,6 +32,9 @@ export interface Contact {
   preferredBoards?: string[];
   /** Boards to also try when no preferred board is reachable. */
   fallbackBoards?: string[];
+  /** Auto-accept key rotations from this contact via challenge-response
+   *  verification (ORPAL-008). When false, a manual prompt is shown instead. */
+  autoAcceptMigration?: boolean;
   addedUtc: string;
 }
 
