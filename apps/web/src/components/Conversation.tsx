@@ -84,10 +84,14 @@ export function Conversation() {
         </div>
         <div className="convo-header-actions">
           {convo?.known && (
-            <label className="relay-toggle" title="Route via TURN so the peer never learns your IP (SPEC §6)">
+            <label
+              className="relay-toggle"
+              title="Relay-only: route this contact through a TURN server so they never learn your IP address (SPEC §6). Requires a configured TURN server in Settings."
+            >
               <input
                 type="checkbox"
                 checked={convo.relayOnly}
+                aria-label="Relay-only mode for this contact (route via TURN, hide your IP)"
                 onChange={(e) => void setRelayOnly(selected, e.target.checked)}
               />
               relay-only
@@ -155,7 +159,12 @@ export function Conversation() {
       </div>
 
       <footer className="composer">
-        <button className="attach" title="Send a file" onClick={() => void sendFile()}>
+        <button
+          className="attach"
+          title="Send a file"
+          aria-label="Send a file"
+          onClick={() => void sendFile()}
+        >
           📎
         </button>
         <textarea

@@ -2,21 +2,109 @@ import { useState } from "react";
 import { useOrpal } from "../state/orpal-context.js";
 import { Modal } from "./Modal.js";
 import type { IceServer } from "@shared/ipc";
+import {
+  configHasTurn,
+  formToIceServers,
+  iceServersToForm,
+  isSimpleConfig,
+  parseIceJson,
+  testIceServers,
+  validateForm,
+  type IceForm,
+  type IceTestResult,
+} from "../orpal/ice-config.js";
+
+type TestState =
+  | { phase: "idle" }
+  | { phase: "running" }
+  | { phase: "done"; result: IceTestResult; hadTurn: boolean }
+  | { phase: "error"; message: string };
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { settings, saveSettings, settingsNeedRestart } = useOrpal();
   const [boards, setBoards] = useState<string[]>(
     settings.boards.length ? [...settings.boards] : [""],
   );
-  const [iceJson, setIceJson] = useState(JSON.stringify(settings.iceServers, null, 2));
+
+  // ICE config has two editors kept in sync: a friendly form (default) and a raw
+  // JSON escape hatch (Advanced). Both serialize down to the same IceServer[].
+  const [form, setForm] = useState<IceForm>(() => iceServersToForm(settings.iceServers));
+  const [advanced, setAdvanced] = useState(false);
+  const [iceJson, setIceJson] = useState(() => JSON.stringify(settings.iceServers, null, 2));
+
   const [relayDefault, setRelayDefault] = useState(settings.relayOnlyByDefault);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [test, setTest] = useState<TestState>({ phase: "idle" });
 
   const setBoard = (i: number, v: string) =>
     setBoards((b) => b.map((x, idx) => (idx === i ? v : x)));
   const addBoard = () => setBoards((b) => [...b, ""]);
   const removeBoard = (i: number) => setBoards((b) => b.filter((_, idx) => idx !== i));
+
+  const setStun = (stunUrl: string) => setForm((f) => ({ ...f, stunUrl }));
+  const addTurn = () =>
+    setForm((f) => ({ ...f, turns: [...f.turns, { url: "", username: "", credential: "" }] }));
+  const removeTurn = (i: number) =>
+    setForm((f) => ({ ...f, turns: f.turns.filter((_, idx) => idx !== i) }));
+  const setTurn = (i: number, patch: Partial<IceForm["turns"][number]>) =>
+    setForm((f) => ({
+      ...f,
+      turns: f.turns.map((t, idx) => (idx === i ? { ...t, ...patch } : t)),
+    }));
+
+  // Live validation for the form editor (shown inline, not on save only).
+  const formErrors = advanced ? [] : validateForm(form);
+
+  /** Resolve the current editor down to an IceServer[], or an error string. */
+  const resolveIceServers = (): { servers: IceServer[] } | { err: string } => {
+    if (advanced) {
+      const parsed = parseIceJson(iceJson);
+      return parsed.ok ? { servers: parsed.servers } : { err: parsed.error };
+    }
+    const errs = validateForm(form);
+    if (errs.length) return { err: errs[0] };
+    return { servers: formToIceServers(form) };
+  };
+
+  // Switching editors carries the config across so neither view goes stale.
+  const openAdvanced = () => {
+    if (!advanced) setIceJson(JSON.stringify(formToIceServers(form), null, 2));
+    setAdvanced(true);
+  };
+  const closeAdvanced = () => {
+    const parsed = parseIceJson(iceJson);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      return;
+    }
+    if (!isSimpleConfig(parsed.servers)) {
+      setError(
+        "This JSON has servers the simple form can’t represent (URL arrays, multiple STUN " +
+          "entries, or unusual schemes). Keep editing here, or simplify it first.",
+      );
+      return;
+    }
+    setForm(iceServersToForm(parsed.servers));
+    setError(null);
+    setAdvanced(false);
+  };
+
+  const runTest = async () => {
+    const resolved = resolveIceServers();
+    if ("err" in resolved) {
+      setError(resolved.err);
+      return;
+    }
+    setError(null);
+    setTest({ phase: "running" });
+    try {
+      const result = await testIceServers(resolved.servers);
+      setTest({ phase: "done", result, hadTurn: configHasTurn(resolved.servers) });
+    } catch (err) {
+      setTest({ phase: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  };
 
   const save = async () => {
     const cleaned = boards.map((b) => b.trim()).filter(Boolean);
@@ -24,16 +112,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       setError("Add at least one board URL (ws:// or wss://).");
       return;
     }
-    let iceServers: IceServer[];
-    try {
-      iceServers = JSON.parse(iceJson);
-      if (!Array.isArray(iceServers)) throw new Error("must be an array");
-    } catch (err) {
-      setError(`ICE servers must be a JSON array: ${err instanceof Error ? err.message : err}`);
+    const resolved = resolveIceServers();
+    if ("err" in resolved) {
+      setError(resolved.err);
       return;
     }
     setError(null);
-    await saveSettings({ boards: cleaned, iceServers, relayOnlyByDefault: relayDefault });
+    await saveSettings({
+      boards: cleaned,
+      iceServers: resolved.servers,
+      relayOnlyByDefault: relayDefault,
+    });
     setSaved(true);
   };
 
@@ -52,6 +141,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             onClick={() => removeBoard(i)}
             disabled={boards.length === 1}
             title="Remove board"
+            aria-label="Remove board"
           >
             ✕
           </button>
@@ -65,18 +155,115 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         you’re both on. The first board to make a working connection wins.
       </p>
 
-      <label className="field-label">ICE servers (STUN/TURN) — JSON</label>
-      <textarea
-        className="card-input mono"
-        rows={6}
-        value={iceJson}
-        onChange={(e) => setIceJson(e.target.value)}
-      />
-      <p className="muted">
-        A STUN server lets two NATed peers connect directly. For relay-only contacts you must add a
-        TURN server here with credentials, e.g.
-        <code> {"{ \"urls\": \"turn:host:3478\", \"username\": \"u\", \"credential\": \"p\" }"}</code>.
-      </p>
+      <div className="ice-head">
+        <label className="field-label">Connection helpers (STUN / TURN)</label>
+        <button
+          className="ghost ice-advanced-toggle"
+          onClick={() => (advanced ? closeAdvanced() : openAdvanced())}
+          aria-pressed={advanced}
+        >
+          {advanced ? "← Back to form" : "Advanced (edit JSON)"}
+        </button>
+      </div>
+
+      <details className="ice-why">
+        <summary>Why do I need this?</summary>
+        <p className="muted">
+          Orpal connects your two devices <strong>directly</strong>, but most devices sit behind a
+          home/office router (NAT) that hides their address. A <strong>STUN</strong> server is a
+          quick “what’s my public address?” lookup that lets two such devices find each other — it
+          never sees your messages. When a network is too strict for even that (symmetric NAT, or a
+          contact you’ve set to <strong>relay-only</strong> so they never learn your IP), a{" "}
+          <strong>TURN</strong> server relays the encrypted traffic for you and therefore needs a
+          username and credential. Your messages and files stay end-to-end encrypted in every case.
+        </p>
+      </details>
+
+      {advanced ? (
+        <>
+          <textarea
+            className="card-input mono"
+            rows={7}
+            value={iceJson}
+            onChange={(e) => setIceJson(e.target.value)}
+            aria-label="ICE servers JSON"
+          />
+          <p className="muted">
+            Raw <code>RTCIceServer[]</code>. Each entry needs a <code>urls</code> field; TURN entries
+            also need <code>username</code> and <code>credential</code>.
+          </p>
+        </>
+      ) : (
+        <>
+          <label className="ice-sub-label">STUN server</label>
+          <input
+            value={form.stunUrl}
+            onChange={(e) => setStun(e.target.value)}
+            placeholder="stun:stun.l.google.com:19302"
+            aria-label="STUN server URL"
+          />
+
+          <label className="ice-sub-label">TURN servers (for relay-only / strict NATs)</label>
+          {form.turns.length === 0 && (
+            <p className="muted ice-turn-empty">
+              No TURN server yet. Add one if a contact is unreachable over STUN alone, or to use
+              relay-only mode.
+            </p>
+          )}
+          {form.turns.map((t, i) => (
+            <div className="turn-card" key={i}>
+              <div className="turn-card-head">
+                <span className="muted">TURN server{form.turns.length > 1 ? ` #${i + 1}` : ""}</span>
+                <button
+                  className="ghost board-remove"
+                  onClick={() => removeTurn(i)}
+                  title="Remove TURN server"
+                  aria-label="Remove TURN server"
+                >
+                  ✕
+                </button>
+              </div>
+              <input
+                value={t.url}
+                onChange={(e) => setTurn(i, { url: e.target.value })}
+                placeholder="turn:turn.example.com:3478"
+                aria-label="TURN server URL"
+              />
+              <input
+                value={t.username}
+                onChange={(e) => setTurn(i, { username: e.target.value })}
+                placeholder="Username"
+                aria-label="TURN username"
+              />
+              <input
+                value={t.credential}
+                onChange={(e) => setTurn(i, { credential: e.target.value })}
+                placeholder="Credential"
+                type="password"
+                aria-label="TURN credential"
+              />
+            </div>
+          ))}
+          <button className="ghost add-board" onClick={addTurn}>
+            + Add TURN server
+          </button>
+        </>
+      )}
+
+      {formErrors.length > 0 && (
+        <ul className="error-text ice-errors">
+          {formErrors.map((e, i) => (
+            <li key={i}>{e}</li>
+          ))}
+        </ul>
+      )}
+
+      <div className="ice-test-row">
+        <button className="ghost" onClick={runTest} disabled={test.phase === "running"}>
+          {test.phase === "running" ? "Testing…" : "Test connection"}
+        </button>
+        <TestReport test={test} />
+      </div>
 
       <label className="checkbox-row">
         <input type="checkbox" checked={relayDefault} onChange={(e) => setRelayDefault(e.target.checked)} />
@@ -95,5 +282,32 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </button>
       </div>
     </Modal>
+  );
+}
+
+function TestReport({ test }: { test: TestState }) {
+  if (test.phase === "idle" || test.phase === "running") return null;
+  if (test.phase === "error") {
+    return <span className="ice-test-result error-text">Test failed: {test.message}</span>;
+  }
+  const { result, hadTurn } = test;
+  return (
+    <span className="ice-test-result" role="status">
+      <span className={result.srflx ? "ok" : "warn"}>
+        {result.srflx ? "✓ STUN reachable (server-reflexive candidate)" : "✗ No STUN candidate"}
+      </span>
+      {hadTurn && (
+        <span className={result.relay ? "ok" : "warn"}>
+          {result.relay ? "✓ TURN relay candidate obtained" : "✗ No TURN relay candidate"}
+        </span>
+      )}
+      {!result.srflx && !result.relay && (
+        <span className="muted">
+          Got {result.candidateCount} candidate(s){result.host ? ", local only" : ""}. Check the URL,
+          port, and (for TURN) the credentials.
+        </span>
+      )}
+      {result.errors.length > 0 && <span className="muted">{result.errors.join(" · ")}</span>}
+    </span>
   );
 }

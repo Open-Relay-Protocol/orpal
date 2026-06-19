@@ -790,6 +790,70 @@ textarea.mono,
 .info-text { color: var(--lcd); font-size: 12.5px; text-shadow: 0 0 4px rgba(79, 160, 255, 0.4); }
 .error-box { max-width: 460px; }
 
+/* ---- ICE servers (STUN/TURN) settings (issue #25) ---------------------- */
+.ice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ice-advanced-toggle { font-size: 11px; padding: 4px 9px; }
+.ice-why {
+  font-size: 12.5px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid #000;
+  border-radius: 4px;
+  padding: 6px 9px;
+}
+.ice-why summary {
+  cursor: pointer;
+  color: var(--lcd);
+  text-shadow: 0 0 4px rgba(79, 160, 255, 0.35);
+}
+.ice-why p { margin: 6px 0 2px; }
+.ice-sub-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+  letter-spacing: 0.4px;
+}
+.ice-turn-empty { margin: 4px 0; }
+.turn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #000;
+  border-radius: 4px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  margin-top: 6px;
+}
+.turn-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.ice-errors { margin: 6px 0 0; padding-left: 18px; }
+.ice-errors li { margin: 2px 0; }
+.ice-test-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ice-test-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.ice-test-result .ok { color: #8fe3a0; }
+.ice-test-result .warn { color: #ffd27a; }
+
 /* =========================================================================
    Responsive — phones, foldables, and tablets.
 
