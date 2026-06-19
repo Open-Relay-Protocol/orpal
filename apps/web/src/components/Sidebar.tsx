@@ -34,8 +34,13 @@ export function Sidebar(props: {
           </div>
         </div>
         <div className="tagline">it really cracks the crab’s back 🦀</div>
-        <div className={`broker broker-${brokerState}`} title={identityKey}>
-          <span className="dot" /> {BROKER_LABEL[brokerState] ?? brokerState}
+        <div
+          className={`broker broker-${brokerState}`}
+          title={`${BROKER_LABEL[brokerState] ?? brokerState} · your identity: ${identityKey}`}
+          role="status"
+          aria-label={`Board signal: ${BROKER_LABEL[brokerState] ?? brokerState}`}
+        >
+          <span className="dot" aria-hidden="true" /> {BROKER_LABEL[brokerState] ?? brokerState}
         </div>
         {pendingMetrics.total > 0 && (
           <div
