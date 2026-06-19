@@ -47,70 +47,75 @@ afterEach(() => {
 });
 
 describe("identity migration wizard (ORPAL-008)", () => {
-  it("initiator sends a key-migration and recipient receives the prompt", async () => {
+  it("auto-accepts via challenge-response: both transport keys verified", async () => {
     const { a, b } = makeMigrationPair();
     live = [a, b];
     await a.start();
     await b.start();
     await linkBoth(a, b);
 
-    // Establish a connection so the migration frame can be sent.
+    // Establish a connection.
     const bGot = once(b.events, "message", (e) => e.message.text === "setup");
     await a.sendText(b.identityKey, "setup");
     await bGot;
 
-    // B listens for incoming migration.
-    const migrationPrompt = once(b.events, "migration-incoming");
-
-    // A starts a migration with a 1-hour retirement window.
-    const retireAt = new Date(Date.now() + 3600_000).toISOString();
-    await a.startMigration(retireAt);
-
-    expect(a.migrationActive).toBe(true);
-    expect(a.migrationProgress).not.toBeNull();
-    expect(a.migrationProgress!.phase).toBe("dual-validity");
-    expect(a.migrationProgress!.totalContacts).toBe(1);
-
-    // B should receive the migration prompt.
-    const prompt = await migrationPrompt;
-    expect(prompt.pending.contactKey).toBe(a.identityKey);
-    expect(prompt.pending.migration.old_key).toBe(a.identityKey);
-    expect(b.pendingIncomingMigrations.length).toBe(1);
-  });
-
-  it("recipient accepts migration and sends back an ack", async () => {
-    const { a, b } = makeMigrationPair();
-    live = [a, b];
-    await a.start();
-    await b.start();
-    await linkBoth(a, b);
-
-    // Establish connection.
-    const bGot = once(b.events, "message", (e) => e.message.text === "hi");
-    await a.sendText(b.identityKey, "hi");
-    await bGot;
-
-    const migrationPrompt = once(b.events, "migration-incoming");
-
-    const retireAt = new Date(Date.now() + 3600_000).toISOString();
-    await a.startMigration(retireAt);
-    await migrationPrompt;
-
-    // Listen for the ack-carrying progress update AFTER startMigration's own emit.
+    // A starts a migration. B should auto-verify via challenge-response and
+    // send back a migration_ack — no manual prompt needed.
     const ackReceived = once(
       a.events,
       "migration-progress",
       (e) => e.progress.acknowledged > 0,
     );
 
-    // B accepts the migration.
-    const accepted = await b.acceptMigration(a.identityKey);
-    expect(accepted).toBe(true);
-    expect(b.pendingIncomingMigrations.length).toBe(0);
+    const retireAt = new Date(Date.now() + 3600_000).toISOString();
+    await a.startMigration(retireAt);
 
-    // A should receive the ack and update progress.
+    // The ack should arrive automatically (challenge → response → auto-accept → ack).
     const progress = await ackReceived;
     expect(progress.progress.acknowledged).toBe(1);
+    expect(a.migrationProgress!.phase).toBe("dual-validity");
+
+    // B should have no pending prompts (it was auto-accepted).
+    expect(b.pendingIncomingMigrations.length).toBe(0);
+  });
+
+  it("manual accept still works as a fallback", async () => {
+    const { a, b } = makeMigrationPair();
+    live = [a, b];
+    await a.start();
+    await b.start();
+    await linkBoth(a, b);
+
+    const bGot = once(b.events, "message", (e) => e.message.text === "hi");
+    await a.sendText(b.identityKey, "hi");
+    await bGot;
+
+    // Manually accept (simulates the case where challenges couldn't be sent).
+    const migrationPrompt = once(b.events, "migration-incoming");
+    const retireAt = new Date(Date.now() + 3600_000).toISOString();
+
+    // Temporarily remove B's stored transport key for A so challenges can't
+    // be created, forcing the fallback to manual prompt.
+    const bStore = (b as any).contactTransportKey as Map<string, string>;
+    const savedTk = bStore.get(a.identityKey)!;
+    bStore.delete(a.identityKey);
+
+    await a.startMigration(retireAt);
+    const prompt = await migrationPrompt;
+    expect(prompt.pending.contactKey).toBe(a.identityKey);
+
+    // Restore and manually accept.
+    bStore.set(a.identityKey, savedTk);
+    const ackReceived = once(
+      a.events,
+      "migration-progress",
+      (e) => e.progress.acknowledged > 0,
+    );
+    const accepted = await b.acceptMigration(a.identityKey);
+    expect(accepted).toBe(true);
+
+    const ackProgress = await ackReceived;
+    expect(ackProgress.progress.acknowledged).toBe(1);
   });
 
   it("recipient declines migration and no ack is sent", async () => {
@@ -124,6 +129,10 @@ describe("identity migration wizard (ORPAL-008)", () => {
     await a.sendText(b.identityKey, "yo");
     await bGot;
 
+    // Remove transport key to force manual prompt path.
+    const bStore = (b as any).contactTransportKey as Map<string, string>;
+    bStore.delete(a.identityKey);
+
     const migrationPrompt = once(b.events, "migration-incoming");
     const retireAt = new Date(Date.now() + 3600_000).toISOString();
     await a.startMigration(retireAt);
@@ -131,8 +140,6 @@ describe("identity migration wizard (ORPAL-008)", () => {
 
     b.declineMigration(a.identityKey);
     expect(b.pendingIncomingMigrations.length).toBe(0);
-
-    // A's progress should still show 0 acknowledged.
     expect(a.migrationProgress!.acknowledged).toBe(0);
   });
 
@@ -147,14 +154,32 @@ describe("identity migration wizard (ORPAL-008)", () => {
     await a.sendText(b.identityKey, "x");
     await bGot;
 
-    // Set a retirement date in the past.
     const retireAt = new Date(Date.now() - 1000).toISOString();
     await a.startMigration(retireAt);
 
-    // The migration manager should know retirement is due.
     await waitFor(() => a.migrationActive);
-    // We can't directly test isRetirementDue on OrpalClient, but we can
-    // verify the progress shows the correct retire time.
     expect(a.migrationProgress!.retireAfterUtc).toBe(retireAt);
+  });
+
+  it("initiator progress tracks the migration lifecycle", async () => {
+    const { a, b } = makeMigrationPair();
+    live = [a, b];
+    await a.start();
+    await b.start();
+    await linkBoth(a, b);
+
+    const bGot = once(b.events, "message", (e) => e.message.text === "z");
+    await a.sendText(b.identityKey, "z");
+    await bGot;
+
+    expect(a.migrationActive).toBe(false);
+    expect(a.migrationProgress).toBeNull();
+
+    const retireAt = new Date(Date.now() + 3600_000).toISOString();
+    await a.startMigration(retireAt);
+
+    expect(a.migrationActive).toBe(true);
+    expect(a.migrationProgress!.phase).toBe("dual-validity");
+    expect(a.migrationProgress!.totalContacts).toBe(1);
   });
 });

@@ -1036,15 +1036,87 @@ export class OrpalClient {
         const contact = await this.store.getContact(contactKey);
         const name = contact?.displayName ?? contactKey;
         const result = this.migration.handleIncomingMigration(frame.migration, contactKey, name);
-        if (result.valid) {
-          const pending = this.migration.pendingMigrations;
-          const latest = pending[pending.length - 1];
-          if (latest) this.events.emit("migration-incoming", { pending: latest });
-        } else {
+        if (!result.valid) {
           this.events.emit("error", {
             error: new Error(`Invalid key-migration from ${contactKey}: ${result.reason}`),
             context: "processFrame:key-migration",
           });
+          return;
+        }
+        // Auto-accept: send cryptographic challenges to both transport keys.
+        // If both come back, we know the same entity holds both keys and
+        // auto-accept without prompting the user.
+        const oldTk = this.contactTransportKey.get(contactKey);
+        const conn = this.connections.get(contactKey);
+        if (oldTk && conn && conn.state === "connected") {
+          const challenges = this.migration.createChallenges(contactKey, oldTk);
+          if (challenges) {
+            for (const c of challenges) {
+              conn.channel
+                .send(encodeAppFrame({
+                  v: 1,
+                  t: "migration-challenge",
+                  target: c.target,
+                  sealed_nonce: c.sealedNonceB64,
+                  ack_pubkey: c.ackPubkeyB64,
+                }))
+                .catch(() => {});
+            }
+            return; // wait for challenge responses before prompting
+          }
+        }
+        // Fallback: no transport key or no connection — surface manual prompt.
+        const pending = this.migration.pendingMigrations;
+        const latest = pending[pending.length - 1];
+        if (latest) this.events.emit("migration-incoming", { pending: latest });
+        return;
+      }
+      case "migration-challenge": {
+        // We are the migrating party: a contact is challenging us to prove we
+        // hold both transport keys. Decrypt the nonce and echo it back.
+        if (!this.migration?.active) return;
+        const echo = this.migration.answerChallenge(
+          this.identity,
+          frame.target,
+          frame.sealed_nonce,
+          frame.ack_pubkey,
+        );
+        if (!echo) return;
+        const conn = this.connections.get(contactKey);
+        if (conn && conn.state === "connected") {
+          conn.channel
+            .send(encodeAppFrame({
+              v: 1,
+              t: "migration-challenge-response",
+              target: frame.target,
+              sealed_echo: echo,
+            }))
+            .catch(() => {});
+        }
+        return;
+      }
+      case "migration-challenge-response": {
+        // We are the recipient: verify the echo proves transport key control.
+        if (!this.migration) return;
+        const { bothVerified, valid } = this.migration.verifyChallengeResponse(
+          contactKey,
+          frame.target,
+          frame.sealed_echo,
+        );
+        if (!valid) {
+          this.events.emit("error", {
+            error: new Error(`Invalid challenge response from ${contactKey} (target: ${frame.target})`),
+            context: "processFrame:migration-challenge-response",
+          });
+        }
+        if (bothVerified) {
+          // Both challenges passed — auto-accept the migration.
+          const accepted = await this.acceptMigration(contactKey);
+          if (accepted) {
+            this.events.emit("migration-progress", {
+              progress: this.migration.progress!,
+            });
+          }
         }
         return;
       }

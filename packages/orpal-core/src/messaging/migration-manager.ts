@@ -14,6 +14,8 @@
 // become unreadable (ciphertext). Re-encrypting history before deletion is a
 // future fix; users are warned in the wizard.
 
+import { x25519 } from "@noble/curves/ed25519";
+import { randomBytes } from "@noble/hashes/utils";
 import {
   DeviceIdentity,
   makeKeyMigration,
@@ -21,6 +23,11 @@ import {
   verifyKeyMigration,
   verifyMigrationAck,
   MigrationRegistry,
+  seal,
+  unseal,
+  b64uEncode,
+  b64uDecode,
+  bytesEqual,
   type KeyMigration,
   type MigrationAck,
 } from "../orp.js";
@@ -70,6 +77,27 @@ export interface PendingMigration {
   migration: KeyMigration;
 }
 
+// ---- challenge-response auto-accept -----------------------------------------
+
+export interface ChallengeSet {
+  contactKey: string;
+  migration: KeyMigration;
+  oldNonce: Uint8Array;
+  newNonce: Uint8Array;
+  oldAckPriv: Uint8Array;
+  oldAckPub: Uint8Array;
+  newAckPriv: Uint8Array;
+  newAckPub: Uint8Array;
+  oldVerified: boolean;
+  newVerified: boolean;
+}
+
+export interface OutboundChallenge {
+  target: "old" | "new";
+  sealedNonceB64: string;
+  ackPubkeyB64: string;
+}
+
 // ---- migration manager ------------------------------------------------------
 
 export interface MigrationManagerOptions {
@@ -95,6 +123,7 @@ export class MigrationManager {
   private newIdentity: DeviceIdentity | null = null;
 
   private readonly pendingIncoming: PendingMigration[] = [];
+  private readonly pendingChallenges = new Map<string, ChallengeSet>();
 
   constructor(opts: MigrationManagerOptions) {
     this.keyStore = opts.keyStore;
@@ -270,5 +299,121 @@ export class MigrationManager {
     migration: KeyMigration,
   ): MigrationAck {
     return makeMigrationAck(recipientIdentity, migration, { now: this.now });
+  }
+
+  // ---- recipient: challenge-response auto-accept ----------------------------
+
+  /**
+   * Generate two challenges for a pending incoming migration. Returns the two
+   * outbound challenge frames. The caller sends them over the existing channel.
+   */
+  createChallenges(contactKey: string, oldTransportKeyB64: string): OutboundChallenge[] | null {
+    const pending = this.pendingIncoming.find((p) => p.contactKey === contactKey);
+    if (!pending) return null;
+
+    const oldNonce = randomBytes(32);
+    const newNonce = randomBytes(32);
+    const oldAckPriv = x25519.utils.randomPrivateKey();
+    const oldAckPub = x25519.getPublicKey(oldAckPriv);
+    const newAckPriv = x25519.utils.randomPrivateKey();
+    const newAckPub = x25519.getPublicKey(newAckPriv);
+
+    const oldTransportKey = b64uDecode(oldTransportKeyB64);
+    const newTransportKey = b64uDecode(pending.migration.new_binding.transport_key);
+    const sealedOld = seal(oldNonce, oldTransportKey);
+    const sealedNew = seal(newNonce, newTransportKey);
+
+    this.pendingChallenges.set(contactKey, {
+      contactKey,
+      migration: pending.migration,
+      oldNonce,
+      newNonce,
+      oldAckPriv,
+      oldAckPub,
+      newAckPriv,
+      newAckPub,
+      oldVerified: false,
+      newVerified: false,
+    });
+
+    return [
+      { target: "old", sealedNonceB64: b64uEncode(sealedOld), ackPubkeyB64: b64uEncode(oldAckPub) },
+      { target: "new", sealedNonceB64: b64uEncode(sealedNew), ackPubkeyB64: b64uEncode(newAckPub) },
+    ];
+  }
+
+  /**
+   * Verify a challenge response from the migrating party. Returns true if BOTH
+   * challenges are now verified (auto-accept should proceed).
+   */
+  verifyChallengeResponse(
+    contactKey: string,
+    target: "old" | "new",
+    sealedEchoB64: string,
+  ): { bothVerified: boolean; valid: boolean } {
+    const cs = this.pendingChallenges.get(contactKey);
+    if (!cs) return { bothVerified: false, valid: false };
+
+    const ackPriv = target === "old" ? cs.oldAckPriv : cs.newAckPriv;
+    const ackPub = target === "old" ? cs.oldAckPub : cs.newAckPub;
+    const expectedNonce = target === "old" ? cs.oldNonce : cs.newNonce;
+
+    let echo: Uint8Array;
+    try {
+      echo = unseal(b64uDecode(sealedEchoB64), ackPriv, ackPub);
+    } catch {
+      return { bothVerified: false, valid: false };
+    }
+
+    if (!bytesEqual(echo, expectedNonce)) {
+      return { bothVerified: false, valid: false };
+    }
+
+    if (target === "old") cs.oldVerified = true;
+    else cs.newVerified = true;
+
+    const bothVerified = cs.oldVerified && cs.newVerified;
+    if (bothVerified) {
+      this.pendingChallenges.delete(contactKey);
+    }
+    return { bothVerified, valid: true };
+  }
+
+  /** Whether we have an active challenge set for a contact. */
+  hasPendingChallenge(contactKey: string): boolean {
+    return this.pendingChallenges.has(contactKey);
+  }
+
+  // ---- initiator: respond to incoming challenges ----------------------------
+
+  /**
+   * Handle an incoming challenge when WE are the one migrating. Decrypt the
+   * nonce with the correct transport key and seal the echo to the challenger's
+   * ack pubkey.
+   */
+  answerChallenge(
+    currentIdentity: DeviceIdentity,
+    target: "old" | "new",
+    sealedNonceB64: string,
+    ackPubkeyB64: string,
+  ): string | null {
+    const transportPriv = target === "old"
+      ? currentIdentity.transportPrivate()
+      : this.newIdentity?.transportPrivate();
+    const transportPub = target === "old"
+      ? currentIdentity.transportPub
+      : this.newIdentity?.transportPub;
+    if (!transportPriv || !transportPub) return null;
+
+    let nonce: Uint8Array;
+    try {
+      nonce = unseal(b64uDecode(sealedNonceB64), transportPriv, transportPub);
+    } catch {
+      return null;
+    }
+
+    const ackPub = b64uDecode(ackPubkeyB64);
+    const sealedEcho = seal(nonce, ackPub);
+    return b64uEncode(sealedEcho);
   }
 }

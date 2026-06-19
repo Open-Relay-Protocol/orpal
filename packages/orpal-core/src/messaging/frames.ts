@@ -127,6 +127,30 @@ export interface MigrationAckFrame {
   ack: Record<string, unknown>;
 }
 
+/** Liveness challenge: recipient seals a nonce to a transport key. The holder
+ *  of the corresponding private key must echo it back to prove control. */
+export interface MigrationChallengeFrame {
+  v: 1;
+  t: "migration-challenge";
+  /** Which key is being challenged: "old" or "new". */
+  target: "old" | "new";
+  /** b64u sealed-box ciphertext of the challenge nonce, sealed to the target's
+   *  transport key. Only the holder of that transport private key can open it. */
+  sealed_nonce: string;
+  /** b64u one-time X25519 public key the response must be sealed to. */
+  ack_pubkey: string;
+}
+
+/** Liveness response: the challenged party echoes the nonce back, sealed to the
+ *  challenger's one-time key. */
+export interface MigrationChallengeResponseFrame {
+  v: 1;
+  t: "migration-challenge-response";
+  target: "old" | "new";
+  /** b64u sealed-box ciphertext of the echoed nonce, sealed to ack_pubkey. */
+  sealed_echo: string;
+}
+
 export type AppFrame =
   | TextFrame
   | AckFrame
@@ -135,7 +159,9 @@ export type AppFrame =
   | FileDoneFrame
   | SealedFrame
   | KeyMigrationFrame
-  | MigrationAckFrame;
+  | MigrationAckFrame
+  | MigrationChallengeFrame
+  | MigrationChallengeResponseFrame;
 
 export function encodeAppFrame(frame: AppFrame): string {
   return JSON.stringify(frame);
@@ -212,6 +238,23 @@ export function decodeAppFrame(text: string): AppFrame | null {
     case "migration-ack":
       if (typeof f.ack === "object" && f.ack !== null) {
         return { v: 1, t: "migration-ack", ack: f.ack as Record<string, unknown> };
+      }
+      return null;
+    case "migration-challenge":
+      if (
+        (f.target === "old" || f.target === "new") &&
+        typeof f.sealed_nonce === "string" &&
+        typeof f.ack_pubkey === "string"
+      ) {
+        return { v: 1, t: "migration-challenge", target: f.target, sealed_nonce: f.sealed_nonce, ack_pubkey: f.ack_pubkey };
+      }
+      return null;
+    case "migration-challenge-response":
+      if (
+        (f.target === "old" || f.target === "new") &&
+        typeof f.sealed_echo === "string"
+      ) {
+        return { v: 1, t: "migration-challenge-response", target: f.target, sealed_echo: f.sealed_echo };
       }
       return null;
     default:
