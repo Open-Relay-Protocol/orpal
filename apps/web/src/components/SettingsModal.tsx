@@ -28,8 +28,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   // ICE config has two editors kept in sync: a friendly form (default) and a raw
   // JSON escape hatch (Advanced). Both serialize down to the same IceServer[].
+  // If the existing config can't be represented in the simple form without loss
+  // (URL arrays, multiple STUN entries, unusual RTCIceServer fields), open in the
+  // JSON editor so the original config stays the source of truth and is never
+  // silently overwritten by the lossy form projection.
   const [form, setForm] = useState<IceForm>(() => iceServersToForm(settings.iceServers));
-  const [advanced, setAdvanced] = useState(false);
+  const [advanced, setAdvanced] = useState(() => !isSimpleConfig(settings.iceServers));
   const [iceJson, setIceJson] = useState(() => JSON.stringify(settings.iceServers, null, 2));
 
   const [relayDefault, setRelayDefault] = useState(settings.relayOnlyByDefault);
@@ -191,6 +195,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <p className="muted">
             Raw <code>RTCIceServer[]</code>. Each entry needs a <code>urls</code> field; TURN entries
             also need <code>username</code> and <code>credential</code>.
+            {!isSimpleConfig(settings.iceServers) && (
+              <>
+                {" "}
+                Your current config uses options the simple form can’t show (e.g. URL arrays or
+                multiple STUN entries), so it opened here to avoid dropping them.
+              </>
+            )}
           </p>
         </>
       ) : (
