@@ -99,16 +99,16 @@ describe("identity migration wizard (ORPAL-008)", () => {
 
     // Temporarily remove B's stored transport key for A so challenges can't
     // be created, forcing the fallback to manual prompt.
-    const bStore = (b as any).contactTransportKey as Map<string, string>;
-    const savedTk = bStore.get(a.identityKey)!;
-    bStore.delete(a.identityKey);
+    const bReg = (b as any).contacts;
+    const savedRec = bReg.get(a.identityKey)!;
+    bReg.patch(a.identityKey, { transportKey: "" });
 
     await a.startMigration(retireAt);
     const prompt = await migrationPrompt;
     expect(prompt.pending.contactKey).toBe(a.identityKey);
 
     // Restore and manually accept.
-    bStore.set(a.identityKey, savedTk);
+    bReg.set(a.identityKey, savedRec);
     const ackReceived = once(
       a.events,
       "migration-progress",
@@ -132,9 +132,9 @@ describe("identity migration wizard (ORPAL-008)", () => {
     await a.sendText(b.identityKey, "yo");
     await bGot;
 
-    // Remove transport key to force manual prompt path.
-    const bStore = (b as any).contactTransportKey as Map<string, string>;
-    bStore.delete(a.identityKey);
+    // Clear transport key to force manual prompt path.
+    const bReg = (b as any).contacts;
+    bReg.patch(a.identityKey, { transportKey: "" });
 
     const migrationPrompt = once(b.events, "migration-incoming");
     const retireAt = new Date(Date.now() + 3600_000).toISOString();
