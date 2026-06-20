@@ -290,6 +290,23 @@ textarea.mono,
   box-shadow: 0 0 4px currentColor;
   animation: blink 1.4s steps(2) infinite;
 }
+/* ORPAL-015: key-protection badge, styled like the broker status line. */
+.key-protection {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.key-protection-hardware { color: var(--ok); }
+.key-protection-cleartext { color: var(--warn); }
+.key-protection .key-protection-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
 @keyframes blink {
   50% { opacity: 0.55; }
 }

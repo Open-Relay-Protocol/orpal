@@ -9,13 +9,28 @@ const BROKER_LABEL: Record<string, string> = {
   error: "Board error",
 };
 
+// ORPAL-015: how the device's private keys are protected at rest.
+const KEY_PROTECTION_LABEL: Record<string, string> = {
+  hardware: "Keys hardware-sealed",
+  cleartext: "Keys not hardware-sealed",
+};
+const KEY_PROTECTION_TIP: Record<string, string> = {
+  hardware:
+    "Your private keys are sealed by this device's secure hardware (Secure Enclave / " +
+    "Android Keystore / TPM). They never sit unencrypted at rest.",
+  cleartext:
+    "Your private keys are stored locally and origin-scoped, but NOT hardware-sealed " +
+    "(no secure hardware, a dismissed biometric prompt, or unsupported WebAuthn PRF). " +
+    "Use a device with biometric/secure-hardware auth for stronger protection.",
+};
+
 export function Sidebar(props: {
   onShowIdentity: () => void;
   onAddContact: () => void;
   onSettings: () => void;
   onMigration: () => void;
 }) {
-  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress } =
+  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress, keyProtection } =
     useOrpal();
 
   return (
@@ -41,6 +56,17 @@ export function Sidebar(props: {
           aria-label={`Board signal: ${BROKER_LABEL[brokerState] ?? brokerState}`}
         >
           <span className="dot" aria-hidden="true" /> {BROKER_LABEL[brokerState] ?? brokerState}
+        </div>
+        <div
+          className={`key-protection key-protection-${keyProtection}`}
+          title={KEY_PROTECTION_TIP[keyProtection]}
+          role="status"
+          aria-label={KEY_PROTECTION_LABEL[keyProtection]}
+        >
+          <span className="key-protection-icon" aria-hidden="true">
+            {keyProtection === "hardware" ? "🔒" : "⚠️"}
+          </span>{" "}
+          {KEY_PROTECTION_LABEL[keyProtection]}
         </div>
         {pendingMetrics.total > 0 && (
           <div

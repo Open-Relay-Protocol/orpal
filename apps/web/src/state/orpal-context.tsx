@@ -19,7 +19,7 @@ import {
   type StoredMessage,
 } from "@orpal/core";
 import type { AppSettings } from "@shared/ipc";
-import { createOrpalApp } from "../orpal/setup.js";
+import { createOrpalApp, type KeyProtection } from "../orpal/setup.js";
 import { makeFileSource } from "../orpal/bridge-stores.js";
 import {
   extractTurnCredentials,
@@ -49,6 +49,8 @@ interface OrpalContextValue {
   brokerState: BrokerState;
   /** Offline send-queue health (issue #17): pending count, oldest, attempts. */
   pendingMetrics: PendingMetrics;
+  /** Whether the device's keys are hardware-sealed or in cleartext fallback (ORPAL-015). */
+  keyProtection: KeyProtection;
   settings: AppSettings;
   settingsNeedRestart: boolean;
 
@@ -110,6 +112,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [connByContact, setConnByContact] = useState<Record<string, ContactState>>({});
   const [brokerState, setBrokerState] = useState<BrokerState>("connecting");
   const [pendingMetrics, setPendingMetrics] = useState<PendingMetrics>(EMPTY_METRICS);
+  const [keyProtection, setKeyProtection] = useState<KeyProtection>("cleartext");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsNeedRestart, setSettingsNeedRestart] = useState(false);
   const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
@@ -139,6 +142,10 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         const app = await createOrpalApp();
         orpalRef.current = app.orpal;
         turnCredStoreRef.current = app.turnCredStore;
+        // Key-protection status (ORPAL-015): seed + live updates if a later save
+        // falls back to cleartext.
+        setKeyProtection(app.keyProtection);
+        app.onKeyProtectionChange(setKeyProtection);
         setIdentityKey(app.orpal.identityKey);
         setOwnCard(app.orpal.ownContactCard());
         setSettings(app.settings);
@@ -344,6 +351,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     connectionOf,
     brokerState,
     pendingMetrics,
+    keyProtection,
     settings: settings ?? { boards: [], iceServers: [], relayOnlyByDefault: false },
     settingsNeedRestart,
     select,
