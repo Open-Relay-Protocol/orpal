@@ -1,6 +1,6 @@
 // Persistent pending-queue for outbound messages awaiting acknowledgement.
 //
-// The Open Relay Protocol has NO store-and-forward — the board is blind and
+// The Open Relay Protocol has NO store-and-forward -- the board is blind and
 // RAM-only (SPEC §0/§9.1), so a message sent to an offline contact simply can't
 // be delivered right now. To make 1:1 messaging reliable across that gap, the
 // SENDER keeps undelivered messages in a durable local queue and retries until
@@ -12,7 +12,7 @@
 // implementation for tests; a shell supplies the durable backing (web/Android:
 // IndexedDB), exactly like ConversationStore.
 
-/** The deliverable carried by a pending message. Today only text is queued —
+/** The deliverable carried by a pending message. Today only text is queued --
  *  file transfers stream over a live channel and are not store-and-forwarded. */
 export type PendingPayload = { kind: "text"; text: string };
 
@@ -20,7 +20,7 @@ export type PendingPayload = { kind: "text"; text: string };
  * One outbound message awaiting acknowledgement, with the retry metadata the
  * delivery worker needs. `messageId` is the app-level id (a client-generated
  * UUID, stable across retries) and is the same id carried in the wire frame and
- * the matching awk — that's how an acknowledgement is correlated back here.
+ * the matching awk -- that's how an acknowledgement is correlated back here.
  */
 export interface PendingMessage {
   /** Contact identity key the message is addressed to. */
@@ -28,7 +28,7 @@ export interface PendingMessage {
   /**
    * Recipient's PINNED b64u X25519 transport key (from their verified contact
    * card). Carried in the queue so the message can be re-sealed (issue #23) on
-   * every retry — including after a reload, independent of the contact store.
+   * every retry -- including after a reload, independent of the contact store.
    */
   recipientTransportKey: string;
   /** Client-generated id, stable across every retry; matched by the awk. */

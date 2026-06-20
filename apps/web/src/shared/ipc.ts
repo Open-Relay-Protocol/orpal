@@ -1,6 +1,6 @@
 // The typed `window.orpal` contract between the shared React UI and the shell.
 //
-// The UI is written against this surface; a shell supplies the implementation —
+// The UI is written against this surface; a shell supplies the implementation --
 // today the browser bridge (src/orpal/browser-bridge.ts, backed by IndexedDB /
 // File System Access / navigator.clipboard), and a future Capacitor/Android shell
 // the same way. All @orpal/core imports here are TYPE-ONLY, so this file pulls no
@@ -56,8 +56,8 @@ export type MessagePatch = Partial<Pick<StoredMessage, "state" | "text" | "file"
 /** The full surface exposed to the UI as `window.orpal`. */
 export interface OrpalBridge {
   /** Private key storage (IndexedDB in the browser shell). The stored value is a
-   *  `PersistedKeys`: either cleartext `StoredKeys`, or — when secure hardware is
-   *  available (ORPAL-007) — a `SecureEnvelope` sealed to the device's secure
+   *  `PersistedKeys`: either cleartext `StoredKeys`, or -- when secure hardware is
+   *  available (ORPAL-007) -- a `SecureEnvelope` sealed to the device's secure
    *  element. The slot is opaque to this surface; `HardwareBackedKeyStore` in
    *  core decides which shape to write. */
   keys: {
@@ -74,6 +74,7 @@ export interface OrpalBridge {
     removeContact(identityKey: string): Promise<void>;
     appendMessage(message: StoredMessage): Promise<void>;
     updateMessage(id: string, patch: MessagePatch): Promise<void>;
+    getMessage(id: string): Promise<StoredMessage | null>;
     listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;
   };
   /** Durable offline send-queue (IndexedDB in the browser shell): outbound
@@ -87,7 +88,7 @@ export interface OrpalBridge {
     get(messageId: string): Promise<PendingMessage | null>;
     list(): Promise<PendingMessage[]>;
   };
-  /** Streaming file I/O for transfers — bytes are never buffered whole in memory. */
+  /** Streaming file I/O for transfers -- bytes are never buffered whole in memory. */
   files: {
     pickForSend(): Promise<FilePick | null>;
     openRead(path: string): Promise<ReadHandle>;
@@ -111,7 +112,7 @@ export interface OrpalBridge {
     writeText(text: string): Promise<void>;
     readText(): Promise<string>;
   };
-  /** Synthesized keyboard typing — the last-resort way to hand a contact card to
+  /** Synthesized keyboard typing -- the last-resort way to hand a contact card to
    *  another device when both the QR code and the clipboard fail. The keystrokes
    *  are typed into whatever field is focused in the Orpal window. */
   input: {

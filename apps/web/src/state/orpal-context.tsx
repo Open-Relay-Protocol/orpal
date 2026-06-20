@@ -19,8 +19,13 @@ import {
   type StoredMessage,
 } from "@orpal/core";
 import type { AppSettings } from "@shared/ipc";
-import { createOrpalApp } from "../orpal/setup.js";
+import { createOrpalApp, type KeyProtection } from "../orpal/setup.js";
 import { makeFileSource } from "../orpal/bridge-stores.js";
+import {
+  extractTurnCredentials,
+  stripTurnCredentials,
+  type SealedCredentialStore,
+} from "../orpal/turn-credentials.js";
 
 export type BrokerState = "connecting" | "open" | "closed" | "error";
 
@@ -44,6 +49,8 @@ interface OrpalContextValue {
   brokerState: BrokerState;
   /** Offline send-queue health (issue #17): pending count, oldest, attempts. */
   pendingMetrics: PendingMetrics;
+  /** Whether the device's keys are hardware-sealed or in cleartext fallback (ORPAL-015). */
+  keyProtection: KeyProtection;
   settings: AppSettings;
   settingsNeedRestart: boolean;
 
@@ -92,6 +99,7 @@ export function useOrpal(): OrpalContextValue {
 
 export function OrpalProvider({ children }: { children: ReactNode }) {
   const orpalRef = useRef<OrpalClient | null>(null);
+  const turnCredStoreRef = useRef<SealedCredentialStore | null>(null);
   const initedRef = useRef(false);
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -104,6 +112,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [connByContact, setConnByContact] = useState<Record<string, ContactState>>({});
   const [brokerState, setBrokerState] = useState<BrokerState>("connecting");
   const [pendingMetrics, setPendingMetrics] = useState<PendingMetrics>(EMPTY_METRICS);
+  const [keyProtection, setKeyProtection] = useState<KeyProtection>("cleartext");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsNeedRestart, setSettingsNeedRestart] = useState(false);
   const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
@@ -132,6 +141,11 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
       try {
         const app = await createOrpalApp();
         orpalRef.current = app.orpal;
+        turnCredStoreRef.current = app.turnCredStore;
+        // Key-protection status (ORPAL-015): seed + live updates if a later save
+        // falls back to cleartext.
+        setKeyProtection(app.keyProtection);
+        app.onKeyProtectionChange(setKeyProtection);
         setIdentityKey(app.orpal.identityKey);
         setOwnCard(app.orpal.ownContactCard());
         setSettings(app.settings);
@@ -180,7 +194,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         const hist = await orpal.history(key, { limit: 500 });
         setMessagesByContact((prev) => ({ ...prev, [key]: [...hist].reverse() }));
         orpal.connect(key).catch(() => {
-          /* offline — surfaced via the connection event */
+          /* offline -- surfaced via the connection event */
         });
       })();
     },
@@ -257,8 +271,14 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   );
 
   const saveSettings = useCallback(async (s: AppSettings) => {
-    await window.orpal.settings.set(s);
-    setSettings(s);
+    // ORPAL-014: seal TURN credentials separately; localStorage gets only URLs.
+    const store = turnCredStoreRef.current;
+    if (store) await store.save(extractTurnCredentials(s.iceServers));
+    const persisted: AppSettings = store
+      ? { ...s, iceServers: stripTurnCredentials(s.iceServers) }
+      : s;
+    await window.orpal.settings.set(persisted);
+    setSettings(s); // keep credentials merged in memory for continued editing
     setSettingsNeedRestart(true); // board/ICE changes apply on next launch
   }, []);
 
@@ -331,6 +351,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     connectionOf,
     brokerState,
     pendingMetrics,
+    keyProtection,
     settings: settings ?? { boards: [], iceServers: [], relayOnlyByDefault: false },
     settingsNeedRestart,
     select,

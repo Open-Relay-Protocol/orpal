@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 
 /** Webcam QR scanner. Calls onResult with the decoded text once a QR is found.
- *  Defaults to the rear ("environment") camera on phones, and — when the device
- *  exposes more than one camera — lets the user cycle through them in case the
+ *  Defaults to the rear ("environment") camera on phones, and -- when the device
+ *  exposes more than one camera -- lets the user cycle through them in case the
  *  wrong lens was picked first. */
 export function QrScanner({ onResult }: { onResult: (text: string) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -13,7 +13,7 @@ export function QrScanner({ onResult }: { onResult: (text: string) => void }) {
 
   const [error, setError] = useState<string | null>(null);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
-  // The explicitly chosen camera. undefined → let the browser pick (rear preferred).
+  // The explicitly chosen camera. undefined -> let the browser pick (rear preferred).
   const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
   // The camera the browser actually resolved to while deviceId is undefined; the
   // starting point for "switch camera" so cycling doesn't force a re-acquire here.

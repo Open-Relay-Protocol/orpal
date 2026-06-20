@@ -21,6 +21,7 @@ import { BrowserWebRTCEndpoint } from "../rtc/browser-webrtc.js";
 import type { Contact } from "../contacts/contact.js";
 import { contactFromCard, parseContactCard, serializeContactCard } from "../contacts/contact.js";
 import type { ConversationStore, StoredMessage } from "../persistence/conversation-store.js";
+import { InMemoryKeyStore } from "../identity/secure-store.js";
 import {
   decodeAppFrame,
   encodeAppFrame,
@@ -100,6 +101,11 @@ export interface OrpalClientOptions {
   now?: () => string;
   migrationStore?: MigrationStore;
   keyStore?: import("../identity/secure-store.js").SecureKeyStore;
+  /** ORPAL-013: a SEPARATE sealed key store for the pending new identity during a
+   *  migration. Should be a HardwareBackedKeyStore over its own slot so the new
+   *  keys are sealed at rest. If omitted, an in-memory store is used -- fine for
+   *  tests, but a shell wanting cross-restart migration resume must wire this. */
+  migrationKeyStore?: import("../identity/secure-store.js").SecureKeyStore;
 }
 
 export type OrpalEvents = {
@@ -206,6 +212,9 @@ export class OrpalClient {
     if (this.opts.migrationStore && this.opts.keyStore) {
       this.migration = new MigrationManager({
         keyStore: this.opts.keyStore,
+        // ORPAL-013: keep the pending new identity's keys in their own sealed
+        // slot. Default to in-memory when a shell doesn't wire one (tests).
+        pendingKeyStore: this.opts.migrationKeyStore ?? new InMemoryKeyStore(),
         migrationStore: this.opts.migrationStore,
         now: this.opts.now,
       });
@@ -377,7 +386,7 @@ export class OrpalClient {
     await this.store.appendMessage(message);
     this.events.emit("message", { message });
     if (!transportKey) {
-      await this.markMessage(contactKey, id, { state: "failed" });
+      await this.markMessage(id, { state: "failed" });
       this.events.emit("error", { error: new NoPinnedKeyError(contactKey), context: "sendText:seal" });
       return id;
     }
@@ -388,13 +397,13 @@ export class OrpalClient {
     }
     let conn: ContactConn;
     try { conn = await this.ensureConnection(contactKey); } catch (err) {
-      await this.markMessage(contactKey, id, { state: "failed" });
+      await this.markMessage(id, { state: "failed" });
       if (!(err instanceof OfflineError)) this.events.emit("error", { error: err, context: "sendText:connect" });
       return id;
     }
     conn.channel.send(this.encodeSealed(transportKey, { v: 1, t: "text", id, text, ts }))
-      .then(() => this.markMessage(contactKey, id, { state: "delivered" }))
-      .catch(() => this.markMessage(contactKey, id, { state: "failed" }));
+      .then(() => this.markMessage(id, { state: "delivered" }))
+      .catch(() => this.markMessage(id, { state: "failed" }));
     return id;
   }
 
@@ -404,29 +413,28 @@ export class OrpalClient {
       if (err instanceof OfflineError) return false;
       throw err;
     }
-    await this.markMessage(msg.recipientId, msg.messageId, { state: "sending" });
+    await this.markMessage(msg.messageId, { state: "sending" });
     await conn.channel.send(this.encodeSealed(msg.recipientTransportKey, { v: 1, t: "text", id: msg.messageId, text: msg.payload.text, ts: msg.timestamp }));
-    await this.markMessage(msg.recipientId, msg.messageId, { state: "delivered" });
+    await this.markMessage(msg.messageId, { state: "delivered" });
     return true;
   }
 
   async retryText(messageId: string, contactKey: string): Promise<void> {
-    const rows = await this.store.listMessages(contactKey);
-    const msg = rows.find((m) => m.id === messageId);
+    const msg = await this.store.getMessage(messageId);
     if (!msg || msg.kind !== "text" || msg.direction !== "out" || msg.text === undefined) return;
     const transportKey = this.contacts.transportKey(contactKey);
     if (!transportKey) {
-      await this.markMessage(contactKey, messageId, { state: "failed" });
+      await this.markMessage(messageId, { state: "failed" });
       this.events.emit("error", { error: new NoPinnedKeyError(contactKey), context: "retryText:seal" });
       return;
     }
-    await this.markMessage(contactKey, messageId, { state: "sending" });
+    await this.markMessage(messageId, { state: "sending" });
     try {
       const conn = await this.ensureConnection(contactKey);
       conn.channel.send(this.encodeSealed(transportKey, { v: 1, t: "text", id: messageId, text: msg.text, ts: msg.ts }))
-        .then(() => this.markMessage(contactKey, messageId, { state: "delivered" }))
-        .catch(() => this.markMessage(contactKey, messageId, { state: "failed" }));
-    } catch { await this.markMessage(contactKey, messageId, { state: "failed" }); }
+        .then(() => this.markMessage(messageId, { state: "delivered" }))
+        .catch(() => this.markMessage(messageId, { state: "failed" }));
+    } catch { await this.markMessage(messageId, { state: "failed" }); }
   }
 
   async sendFile(contactKey: string, source: FileSource): Promise<string> {
@@ -440,23 +448,23 @@ export class OrpalClient {
     this.events.emit("message", { message });
     const transportKey = this.contacts.transportKey(contactKey);
     if (!transportKey) {
-      await this.markFile(contactKey, fileId, { state: "failed" }, "failed");
+      await this.markFile(fileId, { state: "failed" }, "failed");
       this.events.emit("error", { error: new NoPinnedKeyError(contactKey), context: "sendFile:seal" });
       return fileId;
     }
     let conn: ContactConn;
     try { conn = await this.ensureConnection(contactKey); } catch (err) {
-      await this.markFile(contactKey, fileId, { state: "failed" }, "failed");
+      await this.markFile(fileId, { state: "failed" }, "failed");
       if (!(err instanceof OfflineError)) this.events.emit("error", { error: err, context: "sendFile:connect" });
       return fileId;
     }
     const sender: AckedSender = { sendFrame: (frame: AppFrame) => conn.channel.send(this.maybeSealOutbound(transportKey, frame)) };
     sendFile(sender, source, { ...ft, fileId, onProgress: (p) => {
-      void this.markFile(contactKey, fileId, { transferred: p.transferred, state: "transferring" });
+      void this.markFile(fileId, { transferred: p.transferred, state: "transferring" });
       this.events.emit("transfer-progress", { contactKey, direction: "out", progress: p });
     }})
-      .then((res) => this.markFile(contactKey, fileId, { state: "complete", sha256: res.sha256 }, "delivered"))
-      .catch((err) => { void this.markFile(contactKey, fileId, { state: "failed" }, "failed"); this.events.emit("error", { error: err, context: "sendFile" }); });
+      .then((res) => this.markFile(fileId, { state: "complete", sha256: res.sha256 }, "delivered"))
+      .catch((err) => { void this.markFile(fileId, { state: "failed" }, "failed"); this.events.emit("error", { error: err, context: "sendFile" }); });
     return fileId;
   }
 
@@ -572,13 +580,13 @@ export class OrpalClient {
         await this.store.appendMessage(message);
         this.events.emit("message", { message });
         const incoming = await this.opts.createFileSink!(offer, contactKey);
-        if (incoming.path) await this.markFile(contactKey, offer.fileId, { path: incoming.path });
+        if (incoming.path) await this.markFile(offer.fileId, { path: incoming.path });
         return incoming.sink;
       },
-      onProgress: (p) => { void this.markFile(contactKey, p.fileId, { transferred: p.transferred, state: "transferring" }); this.events.emit("transfer-progress", { contactKey, direction: "in", progress: p }); },
+      onProgress: (p) => { void this.markFile(p.fileId, { transferred: p.transferred, state: "transferring" }); this.events.emit("transfer-progress", { contactKey, direction: "in", progress: p }); },
       onComplete: (outcome) => {
-        if (outcome.ok) void this.markFile(contactKey, outcome.fileId, { state: "complete" });
-        else void this.markFile(contactKey, outcome.fileId, { state: outcome.reason === "integrity-failed" ? "integrity-failed" : "failed" });
+        if (outcome.ok) void this.markFile(outcome.fileId, { state: "complete" });
+        else void this.markFile(outcome.fileId, { state: outcome.reason === "integrity-failed" ? "integrity-failed" : "failed" });
       },
     });
   }
@@ -598,20 +606,20 @@ export class OrpalClient {
   private async processFrame(contactKey: string, frame: AppFrame | SealablePayload): Promise<void> {
     switch (frame.t) {
       case "text": {
-        const already = (await this.store.listMessages(contactKey)).some((m) => m.id === frame.id);
+        const already = (await this.store.getMessage(frame.id)) !== null;
         if (!already) { const message: StoredMessage = { id: frame.id, contactKey, direction: "in", kind: "text", text: frame.text, ts: frame.ts, state: "delivered" }; await this.store.appendMessage(message); this.events.emit("message", { message }); }
         this.sendAwk(contactKey, frame.id);
         return;
       }
       case "awk": {
-        if (this.worker) { const removed = await this.worker.acknowledge(frame.id); if (removed) await this.markMessage(contactKey, frame.id, { state: "acknowledged" }); }
-        else { await this.markMessage(contactKey, frame.id, { state: "acknowledged" }); }
+        if (this.worker) { const removed = await this.worker.acknowledge(frame.id); if (removed) await this.markMessage(frame.id, { state: "acknowledged" }); }
+        else { await this.markMessage(frame.id, { state: "acknowledged" }); }
         return;
       }
       case "file-offer": {
         const conn = this.conns.getConnection(contactKey);
         if (!conn?.fileReceiver) return;
-        const already = (await this.store.listMessages(contactKey)).some((m) => m.id === frame.fileId);
+        const already = (await this.store.getMessage(frame.fileId)) !== null;
         if (already) return;
         await conn.fileReceiver.onOffer(frame);
         return;
@@ -680,23 +688,23 @@ export class OrpalClient {
     return run;
   }
 
-  private markMessage(contactKey: string, id: string, patch: Partial<Pick<StoredMessage, "state" | "text" | "file">>): Promise<void> {
+  private markMessage(id: string, patch: Partial<Pick<StoredMessage, "state" | "text" | "file">>): Promise<void> {
     return this.enqueueUpdate(id, async () => {
       await this.store.updateMessage(id, patch);
-      const message = (await this.store.listMessages(contactKey)).find((m) => m.id === id);
+      const message = await this.store.getMessage(id);
       if (message) this.events.emit("message-updated", { id, message });
     });
   }
 
-  private markFile(contactKey: string, fileId: string, filePatch: Partial<NonNullable<StoredMessage["file"]>>, state?: StoredMessage["state"]): Promise<void> {
+  private markFile(fileId: string, filePatch: Partial<NonNullable<StoredMessage["file"]>>, state?: StoredMessage["state"]): Promise<void> {
     return this.enqueueUpdate(fileId, async () => {
-      const current = (await this.store.listMessages(contactKey)).find((m) => m.id === fileId);
+      const current = await this.store.getMessage(fileId);
       if (!current?.file) return;
       const file = { ...current.file, ...filePatch };
       const patch: Partial<Pick<StoredMessage, "state" | "file">> = { file };
       if (state) patch.state = state;
       await this.store.updateMessage(fileId, patch);
-      const message = (await this.store.listMessages(contactKey)).find((m) => m.id === fileId);
+      const message = await this.store.getMessage(fileId);
       if (message) this.events.emit("message-updated", { id: fileId, message });
     });
   }

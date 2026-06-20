@@ -1,4 +1,4 @@
-// @orpal/core — public API surface.
+// @orpal/core -- public API surface.
 //
 // Re-exports the ORP protocol pieces Orpal builds on (via the ./orp.js seam) plus
 // Orpal's own framework-agnostic additions: a browser/WebView WebRTC endpoint, a

@@ -1,9 +1,9 @@
 // orpal-core reuses the ORP reference's encoding helpers, which call Node's
 // `Buffer` with the **base64url** encoding (e.g. `Buffer.from(s, "base64url")`
 // and `buf.toString("base64url")`). Chromium has no Buffer, and the `buffer`
-// browser polyfill doesn't implement base64url — it throws "Unknown encoding:
+// browser polyfill doesn't implement base64url -- it throws "Unknown encoding:
 // base64url". So we install the polyfill AND teach it base64url (standard base64
-// with +→-, /→_, padding stripped). This module MUST be imported first in main.tsx.
+// with +->-, /->_, padding stripped). This module MUST be imported first in main.tsx.
 import { Buffer as BufferPolyfill } from "buffer";
 
 type BufferCtor = typeof BufferPolyfill;

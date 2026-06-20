@@ -1,7 +1,7 @@
 // Web (PWA) entry point. Installs the browser `window.orpal` bridge (IndexedDB /
 // File System Access / clipboard) before the React app mounts, then mounts the
 // shared UI. The React UI and orpal-core are imported via the `@` alias (this
-// app's own src) — a future Capacitor/Android shell wraps this same web build.
+// app's own src) -- a future Capacitor/Android shell wraps this same web build.
 import "@/polyfills.js"; // MUST be first: installs Buffer for orpal-core's encoding helpers
 import { createRoot } from "react-dom/client";
 import { App } from "@/components/App.js";

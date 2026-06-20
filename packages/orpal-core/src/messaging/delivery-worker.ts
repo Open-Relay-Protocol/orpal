@@ -1,4 +1,4 @@
-// The delivery worker — retries pending outbound messages until acknowledged.
+// The delivery worker -- retries pending outbound messages until acknowledged.
 //
 // It drives the persistent pending queue (pending-queue.ts) toward delivery
 // using BOTH strategies the issue calls for, with presence preferred:
@@ -51,7 +51,7 @@ export interface DeliveryWorkerOptions {
    * Attempt to deliver one message over a live channel. Resolve `true` if the
    * frame was dispatched to a connected channel (now awaiting its awk), or
    * `false` if the recipient is offline/unreachable right now. A throw is
-   * treated the same as `false` (a failed attempt) — the worker reschedules.
+   * treated the same as `false` (a failed attempt) -- the worker reschedules.
    */
   attempt: (msg: PendingMessage) => Promise<boolean>;
   backoff?: Partial<BackoffConfig>;
@@ -118,7 +118,7 @@ export class DeliveryWorker {
   }
 
   /**
-   * Presence-based trigger: a recipient just came online — attempt all of their
+   * Presence-based trigger: a recipient just came online -- attempt all of their
    * queued messages now, cancelling any pending backoff so delivery is immediate.
    */
   async flushRecipient(recipientId: string): Promise<void> {

@@ -1,7 +1,7 @@
 // The SINGLE seam between Orpal and the ORP reference (github.com/Prograde-Solutions/orp).
 //
-// Everything Orpal reuses from the protocol — crypto, identity, sealing, ICE
-// filtering, the two-stage match Client, and the ReliableChannel ACK layer — is
+// Everything Orpal reuses from the protocol -- crypto, identity, sealing, ICE
+// filtering, the two-stage match Client, and the ReliableChannel ACK layer -- is
 // re-exported from here so the rest of orpal-core imports `./orp.js` and never
 // reaches into the vendored tree directly. If the reference's layout changes,
 // this is the only file to touch.

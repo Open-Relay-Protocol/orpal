@@ -7,7 +7,7 @@
 //     encrypted tunnel  +  message sealed to the recipient public key  +  ACK
 //
 // we additionally seal each outbound text / file-offer to the recipient's PINNED
-// X25519 transport key — the key carried in their out-of-band-verified contact
+// X25519 transport key -- the key carried in their out-of-band-verified contact
 // card (contacts/contact.ts validates the binding on import). Sealing reuses the
 // reference's anonymous sealed box (orp.ts `seal`/`unseal`); we add no crypto.
 //
@@ -39,7 +39,7 @@ export function sealAppFrame(inner: SealablePayload, recipientTransportKeyB64u: 
 /**
  * Open a sealed frame with the recipient's own transport keypair. Returns the
  * inner frame, or null on any failure (unknown alg, wrong key, tampered box,
- * malformed inner) — callers MUST treat null as "drop, do not display/awk".
+ * malformed inner) -- callers MUST treat null as "drop, do not display/awk".
  */
 export function openSealedFrame(
   frame: SealedFrame,

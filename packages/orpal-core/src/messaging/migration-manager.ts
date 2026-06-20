@@ -43,8 +43,12 @@ export interface MigrationState {
   phase: MigrationPhase;
   oldIdentityKey: string;
   newIdentityKey: string;
-  /** The new identity's stored keys (so we can reconstruct across restarts). */
-  newStoredKeys: StoredKeys;
+  // ORPAL-013: the new identity's PRIVATE keys are NOT stored here. They are
+  // sealed through the same HardwareBackedKeyStore path as the main identity and
+  // kept in a separate `pendingKeyStore` slot; this state holds only public
+  // material (`newIdentityKey` + the public `migration` record). On init the new
+  // identity is reconstructed from the sealed slot, so it survives restarts
+  // without ever sitting in the migration store in cleartext.
   migration: KeyMigration;
   retireAfterUtc: string;
   issuedUtc: string;
@@ -101,7 +105,14 @@ export interface OutboundChallenge {
 // ---- migration manager ------------------------------------------------------
 
 export interface MigrationManagerOptions {
+  /** The MAIN identity's secure key store; the migration's new keys are promoted
+   *  into it at retirement. */
   keyStore: SecureKeyStore;
+  /** A SEPARATE secure key store holding the pending new identity's private keys
+   *  while a migration is in flight (ORPAL-013). Backed by the same
+   *  HardwareBackedKeyStore sealing path as `keyStore` but over its own slot, so
+   *  the new keys are sealed at rest and never touch the migration store. */
+  pendingKeyStore: SecureKeyStore;
   migrationStore: MigrationStore;
   now?: () => string;
 }
@@ -115,6 +126,7 @@ export interface MigrationProgress {
 
 export class MigrationManager {
   private readonly keyStore: SecureKeyStore;
+  private readonly pendingKeyStore: SecureKeyStore;
   private readonly migrationStore: MigrationStore;
   private readonly now: () => string;
   private readonly registry = new MigrationRegistry();
@@ -127,14 +139,33 @@ export class MigrationManager {
 
   constructor(opts: MigrationManagerOptions) {
     this.keyStore = opts.keyStore;
+    this.pendingKeyStore = opts.pendingKeyStore;
     this.migrationStore = opts.migrationStore;
     this.now = opts.now ?? (() => new Date().toISOString());
   }
 
   async init(): Promise<void> {
     this.state = await this.migrationStore.load();
-    if (this.state) {
-      this.newIdentity = IdentityManager.fromStored(this.state.newStoredKeys);
+    if (!this.state || this.state.phase === "complete") return;
+
+    // Reconstruct the pending new identity from its sealed slot (ORPAL-013) --
+    // the private keys live in pendingKeyStore, hardware-sealed like the main
+    // identity, never in the migration store.
+    const stored = await this.pendingKeyStore.load();
+    if (stored) {
+      this.newIdentity = IdentityManager.fromStored(stored);
+      return;
+    }
+
+    // Backward compat: a migration started before ORPAL-013 embedded the new
+    // identity's keys in the migration state as cleartext. Promote them into the
+    // sealed slot and strip them from the state so they stop sitting in cleartext.
+    const legacy = (this.state as { newStoredKeys?: StoredKeys }).newStoredKeys;
+    if (legacy) {
+      await this.pendingKeyStore.save(legacy);
+      this.newIdentity = IdentityManager.fromStored(legacy);
+      delete (this.state as { newStoredKeys?: StoredKeys }).newStoredKeys;
+      await this.migrationStore.save(this.state);
     }
   }
 
@@ -184,12 +215,16 @@ export class MigrationManager {
       now: this.now,
     });
 
+    // ORPAL-013: seal the new identity's private keys BEFORE any migration state
+    // is persisted. They go through the same HardwareBackedKeyStore sealing path
+    // as the main identity; the migration store only ever holds public material.
+    await this.pendingKeyStore.save(newStoredKeys);
+
     this.newIdentity = newId;
     this.state = {
       phase: "notifying",
       oldIdentityKey: currentIdentity.identityKeyB64,
       newIdentityKey: newId.identityKeyB64,
-      newStoredKeys,
       migration,
       retireAfterUtc,
       issuedUtc: migration.issued_utc,
@@ -229,9 +264,15 @@ export class MigrationManager {
   // ---- initiator: retire the old key ----------------------------------------
 
   async retire(): Promise<void> {
-    if (!this.state || !this.newIdentity) return;
+    if (!this.state) return;
+    // Promote the sealed pending keys (ORPAL-013) into the main identity slot,
+    // which re-seals them through its own HardwareBackedKeyStore, then drop the
+    // pending slot.
+    const stored = await this.pendingKeyStore.load();
+    if (!stored) return; // pending keys missing -- cannot safely retire
     await this.keyStore.clear();
-    await this.keyStore.save(this.state.newStoredKeys);
+    await this.keyStore.save(stored);
+    await this.pendingKeyStore.clear();
     this.state.phase = "complete";
     await this.migrationStore.save(this.state);
     await this.migrationStore.clear();

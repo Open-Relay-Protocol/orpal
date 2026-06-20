@@ -3,11 +3,11 @@
 // A browser has no direct OS-keychain API, but it does have one portal to the
 // very same secure hardware: a WebAuthn *platform authenticator*. On each OS the
 // platform authenticator is implemented by exactly the secure element this issue
-// asks for —
+// asks for --
 //
-//   * Apple (Safari / WKWebView)      → Secure Enclave
-//   * Android (Chrome / Capacitor)    → Android Keystore, StrongBox when present
-//   * Windows (Edge / Chrome)         → TPM, via Windows Hello
+//   * Apple (Safari / WKWebView)      -> Secure Enclave
+//   * Android (Chrome / Capacitor)    -> Android Keystore, StrongBox when present
+//   * Windows (Edge / Chrome)         -> TPM, via Windows Hello
 //
 // We use the credential's **PRF extension** (a HMAC-secret evaluated *inside* the
 // authenticator) to derive a 256-bit wrapping key that never exists outside the

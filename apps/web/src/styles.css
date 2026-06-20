@@ -1,7 +1,7 @@
 /* =========================================================================
-   Orpal — "Winamp Classic" skin in ORP cobalt blue (logo + crab mascot brand).
+   Orpal -- "Winamp Classic" skin in ORP cobalt blue (logo + crab mascot brand).
    Gunmetal bevels, a black-and-blue LCD, a spectrum analyzer, and a scrolling
-   track ticker. Purely cosmetic — every class the components use is preserved.
+   track ticker. Purely cosmetic -- every class the components use is preserved.
    ========================================================================= */
 :root {
   --metal-hi: #6e7484;
@@ -151,7 +151,7 @@ textarea.mono,
   padding-right: env(safe-area-inset-right);
 }
 
-/* "Back to contacts" affordance — only meaningful in the single-pane phone
+/* "Back to contacts" affordance -- only meaningful in the single-pane phone
    layout, so it's hidden until the mobile breakpoint reveals it. */
 .convo-back {
   display: none;
@@ -290,6 +290,23 @@ textarea.mono,
   box-shadow: 0 0 4px currentColor;
   animation: blink 1.4s steps(2) infinite;
 }
+/* ORPAL-015: key-protection badge, styled like the broker status line. */
+.key-protection {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.key-protection-hardware { color: var(--ok); }
+.key-protection-cleartext { color: var(--warn); }
+.key-protection .key-protection-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
 @keyframes blink {
   50% { opacity: 0.55; }
 }
@@ -366,7 +383,7 @@ textarea.mono,
   color: #cfddf8;
 }
 
-/* info footer — the ORP logo lives here, not as a brand mark */
+/* info footer -- the ORP logo lives here, not as a brand mark */
 .sidebar-foot {
   display: flex;
   align-items: center;
@@ -855,7 +872,7 @@ textarea.mono,
 .ice-test-result .warn { color: #ffd27a; }
 
 /* =========================================================================
-   Responsive — phones, foldables, and tablets.
+   Responsive -- phones, foldables, and tablets.
 
    Phones (and a folded foldable's narrow outer screen) show ONE pane at a time:
    the contact list, or the open conversation reached by tapping a contact and

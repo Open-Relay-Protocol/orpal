@@ -176,7 +176,7 @@ export function CrabMascot({
         <path d="M102 76 Q118 69 134 76" fill="none" stroke={c.out} strokeWidth={3.5} strokeLinecap="round" />
         <path d="M146 76 Q162 69 178 76" fill="none" stroke={c.out} strokeWidth={3.5} strokeLinecap="round" />
 
-        {/* eyes — pupils track the cursor */}
+        {/* eyes -- pupils track the cursor */}
         <circle cx="118" cy="96" r="16" fill="#ffffff" stroke={c.out} strokeWidth={3} />
         <circle cx="162" cy="96" r="16" fill="#ffffff" stroke={c.out} strokeWidth={3} />
         <circle cx={118 + pdx} cy={96 + pdy} r="7" fill="#0c2f6b" />

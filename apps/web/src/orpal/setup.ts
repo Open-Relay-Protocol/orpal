@@ -7,6 +7,7 @@ import {
   HardwareBackedKeyStore,
   IdentityManager,
   OrpalClient,
+  isSecureEnvelope,
   type DeviceIdentity,
 } from "@orpal/core";
 import { DEFAULT_SETTINGS, type AppSettings } from "@shared/ipc";
@@ -14,16 +15,37 @@ import {
   IpcConversationStore,
   IpcKeyBlobStore,
   IpcMigrationStore,
+  IpcPendingKeyBlobStore,
   IpcPendingQueueStore,
   createIncomingFileSink,
 } from "./bridge-stores.js";
 import { createHardwareKeyProvider } from "./webauthn-keystore.js";
+import {
+  SealedCredentialStore,
+  extractTurnCredentials,
+  hasInlineTurnSecret,
+  mergeTurnCredentials,
+  stripTurnCredentials,
+} from "./turn-credentials.js";
+
+/** Whether the device's private keys are hardware-sealed at rest, or sitting in
+ *  the cleartext IndexedDB fallback (ORPAL-015). */
+export type KeyProtection = "hardware" | "cleartext";
 
 export interface OrpalApp {
   orpal: OrpalClient;
   identity: DeviceIdentity;
   createdIdentity: boolean;
+  /** Settings with sealed TURN credentials merged back in (for the UI to edit). */
   settings: AppSettings;
+  /** Sealed store for the TURN credentials (ORPAL-014); used when saving settings. */
+  turnCredStore: SealedCredentialStore;
+  /** Key-protection status at startup (ORPAL-015), read from what's actually at
+   *  rest in the key slot. */
+  keyProtection: KeyProtection;
+  /** Subscribe to live key-protection changes (e.g. a fallback firing during a
+   *  later save such as a migration). Returns an unsubscribe fn. */
+  onKeyProtectionChange: (cb: (status: KeyProtection) => void) => () => void;
 }
 
 export async function createOrpalApp(): Promise<OrpalApp> {
@@ -36,11 +58,56 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   // The keyStore stays a plain SecureKeyStore, so OrpalClient/IdentityManager are
   // unchanged either way.
   const hardwareProvider = await createHardwareKeyProvider();
-  const keyStore = new HardwareBackedKeyStore(new IpcKeyBlobStore(), hardwareProvider, (err) =>
+  const onSealFallback = (err: unknown) =>
     // eslint-disable-next-line no-console
-    console.warn("[orpal] secure-hardware key sealing unavailable; stored in cleartext", err),
+    console.warn("[orpal] secure-hardware key sealing unavailable; stored in cleartext", err);
+
+  // ORPAL-015: surface whether the keys end up hardware-sealed or in the cleartext
+  // fallback. We seed the status from what's actually at rest after load (below),
+  // and flip it to "cleartext" if a key-sealing fallback fires during any later
+  // save (e.g. a migration reseal).
+  let keyProtection: KeyProtection = "cleartext";
+  const keyProtectionListeners = new Set<(status: KeyProtection) => void>();
+  const setKeyProtection = (status: KeyProtection) => {
+    if (status === keyProtection) return;
+    keyProtection = status;
+    for (const cb of keyProtectionListeners) cb(status);
+  };
+  const onKeySealFallback = (err: unknown) => {
+    onSealFallback(err);
+    setKeyProtection("cleartext");
+  };
+
+  const keyBlobStore = new IpcKeyBlobStore();
+  const keyStore = new HardwareBackedKeyStore(keyBlobStore, hardwareProvider, onKeySealFallback);
+  // ORPAL-013: seal the migration's pending new identity through the same path,
+  // over its own slot, so those keys are never written in cleartext either.
+  const migrationKeyStore = new HardwareBackedKeyStore(
+    new IpcPendingKeyBlobStore(),
+    hardwareProvider,
+    onKeySealFallback,
   );
   const { identity, created } = await IdentityManager.loadOrCreate(keyStore);
+
+  // Read the ground truth from the slot: a sealed envelope means hardware-backed,
+  // anything else (cleartext keys, or no secure hardware) means the fallback.
+  const atRest = await keyBlobStore.load();
+  keyProtection = atRest && isSecureEnvelope(atRest) ? "hardware" : "cleartext";
+
+  // ORPAL-014: keep TURN credentials out of plaintext localStorage. They're sealed
+  // through the same hardware path in their own slot; AppSettings holds only the
+  // TURN URLs. Migrate any pre-ORPAL-014 inline secrets into the sealed store and
+  // strip them from localStorage, then merge the sealed secrets back in for use.
+  const turnCredStore = new SealedCredentialStore(hardwareProvider, onSealFallback);
+  let turnCreds = await turnCredStore.load();
+  if (hasInlineTurnSecret(settings.iceServers)) {
+    turnCreds = { ...extractTurnCredentials(settings.iceServers), ...turnCreds };
+    await turnCredStore.save(turnCreds);
+    settings.iceServers = stripTurnCredentials(settings.iceServers);
+    await window.orpal.settings.set(settings);
+  }
+  const iceServers = mergeTurnCredentials(settings.iceServers, turnCreds);
+  const mergedSettings: AppSettings = { ...settings, iceServers };
 
   // Each board needs to call back into OrpalClient on (re)connect; OrpalClient
   // needs the boards at construction. Resolve the cycle with a forward ref.
@@ -66,14 +133,26 @@ export async function createOrpalApp(): Promise<OrpalApp> {
     // (issue #11). Persisted in IndexedDB, so retries resume after a reload.
     pendingQueue: new IpcPendingQueueStore(),
     boards,
-    iceServers: settings.iceServers,
+    iceServers,
     relayOnlyByDefault: settings.relayOnlyByDefault,
     createFileSink: (offer) => createIncomingFileSink(offer),
     migrationStore: new IpcMigrationStore(),
     keyStore,
+    migrationKeyStore,
   });
   app = orpal;
 
   await orpal.start();
-  return { orpal, identity, createdIdentity: created, settings };
+  return {
+    orpal,
+    identity,
+    createdIdentity: created,
+    settings: mergedSettings,
+    turnCredStore,
+    keyProtection,
+    onKeyProtectionChange: (cb) => {
+      keyProtectionListeners.add(cb);
+      return () => keyProtectionListeners.delete(cb);
+    },
+  };
 }

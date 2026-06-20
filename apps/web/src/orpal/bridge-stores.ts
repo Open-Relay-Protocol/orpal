@@ -25,6 +25,7 @@ import type { FilePick, MessagePatch } from "@shared/ipc";
 import { kvGet, kvSet, kvDelete } from "./idb.js";
 
 const MIGRATION_KV = "migrationState";
+const PENDING_KEYS_KV = "deviceKeys:pending";
 
 /** Private keys via the shell's secure storage (IndexedDB in the browser bridge).
  *  Used directly for the cleartext path; on a device with secure hardware it's the
@@ -56,6 +57,22 @@ export class IpcKeyBlobStore implements KeyBlobStore {
   }
 }
 
+/** ORPAL-013: the raw key slot for the PENDING new identity during a migration.
+ *  A distinct IndexedDB KV slot from the main `deviceKeys` slot, so wrapping it in
+ *  a HardwareBackedKeyStore seals the migration's new keys at rest exactly like
+ *  the main identity -- they never sit in the migration store in cleartext. */
+export class IpcPendingKeyBlobStore implements KeyBlobStore {
+  load(): Promise<PersistedKeys | null> {
+    return kvGet<PersistedKeys>(PENDING_KEYS_KV);
+  }
+  async save(value: PersistedKeys): Promise<void> {
+    await kvSet(PENDING_KEYS_KV, value);
+  }
+  clear(): Promise<void> {
+    return kvDelete(PENDING_KEYS_KV);
+  }
+}
+
 /** Conversation history via the shell's store (IndexedDB in the browser bridge). */
 export class IpcConversationStore implements ConversationStore {
   init(): Promise<void> {
@@ -78,6 +95,9 @@ export class IpcConversationStore implements ConversationStore {
   }
   updateMessage(id: string, patch: MessagePatch): Promise<void> {
     return window.orpal.store.updateMessage(id, patch);
+  }
+  getMessage(id: string): Promise<StoredMessage | null> {
+    return window.orpal.store.getMessage(id);
   }
   listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]> {
     return window.orpal.store.listMessages(contactKey, opts);
