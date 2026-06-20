@@ -20,6 +20,7 @@ import {
 } from "@orpal/core";
 import type { AppSettings } from "@shared/ipc";
 import { createOrpalApp, type KeyProtection } from "../orpal/setup.js";
+import { enablePush, disablePush, pushSupported as pushIsSupported } from "../orpal/push.js";
 import { makeFileSource } from "../orpal/bridge-stores.js";
 import {
   extractTurnCredentials,
@@ -71,6 +72,15 @@ interface OrpalContextValue {
   saveSettings: (s: AppSettings) => Promise<void>;
   reveal: (path: string) => void;
 
+  /** ORPAL-016: wake-on-push state + a live toggle (applied immediately, no
+   *  restart). `pushSupported` is false where the runtime can't register at all
+   *  (e.g. no service worker / Push API). `setPushEnabled` resolves on success
+   *  and rejects with a human-readable message if permission/registration fails,
+   *  leaving the setting unchanged. */
+  pushEnabled: boolean;
+  pushSupported: boolean;
+  setPushEnabled: (on: boolean) => Promise<void>;
+
   migrationProgress: MigrationProgress | null;
   pendingIncomingMigrations: readonly PendingMigration[];
   startMigration: (retireAfterUtc: string) => Promise<void>;
@@ -79,6 +89,15 @@ interface OrpalContextValue {
   declineMigration: (contactKey: string) => void;
   setAutoAcceptMigration: (key: string, value: boolean) => Promise<void>;
 }
+
+// Placeholder settings before the real ones load (empty, not the real defaults,
+// so we never momentarily advertise default boards). Mirrors AppSettings shape.
+const EMPTY_SETTINGS: AppSettings = {
+  boards: [],
+  iceServers: [],
+  relayOnlyByDefault: false,
+  pushNotifications: false,
+};
 
 const EMPTY_METRICS: PendingMetrics = {
   total: 0,
@@ -115,6 +134,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [keyProtection, setKeyProtection] = useState<KeyProtection>("cleartext");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsNeedRestart, setSettingsNeedRestart] = useState(false);
+  const [pushEnabled, setPushEnabledState] = useState(false);
   const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
   const [pendingIncomingMigrations, setPendingIncomingMigrations] = useState<readonly PendingMigration[]>([]);
 
@@ -175,6 +195,32 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
           setPendingIncomingMigrations([...app.orpal.pendingIncomingMigrations]),
         );
         setMigrationProgress(app.orpal.migrationProgress);
+
+        // ORPAL-016: if push was opted into a previous session, re-register and
+        // re-advertise the token now. Best-effort: a revoked permission or a
+        // missing VAPID key just leaves the device reachable-while-open, and we
+        // reflect the real state back into the toggle.
+        if (app.settings.pushNotifications && pushIsSupported()) {
+          try {
+            app.orpal.setPushToken(await enablePush());
+            setPushEnabledState(true);
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn("[orpal] push re-registration failed; staying opted out", err);
+            setPushEnabledState(false);
+          }
+        }
+
+        // A contentless wake from the service worker means a peer is trying to
+        // reach us: make sure presence is back out there immediately rather than
+        // waiting for the next interval (the broker reconnects on its own).
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.addEventListener("message", (event) => {
+            if ((event.data as { type?: string } | null)?.type === "orpal-wake") {
+              orpalRef.current?.reannounce();
+            }
+          });
+        }
 
         setStatus("ready");
       } catch (err) {
@@ -282,6 +328,32 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     setSettingsNeedRestart(true); // board/ICE changes apply on next launch
   }, []);
 
+  // ORPAL-016: flip wake-on-push live. Enabling registers + advertises the token;
+  // disabling clears the token and drops the subscription. The setting is
+  // persisted only after the (un)registration succeeds, so a denied permission
+  // leaves both the toggle and storage off. Applied immediately -- no restart.
+  const setPushEnabled = useCallback(
+    async (on: boolean) => {
+      const orpal = orpalRef.current;
+      if (!orpal) return;
+      if (on) {
+        const token = await enablePush(); // throws PushSetupError if blocked
+        orpal.setPushToken(token);
+      } else {
+        orpal.setPushToken(undefined);
+        await disablePush();
+      }
+      setPushEnabledState(on);
+      const next: AppSettings = { ...(settings ?? EMPTY_SETTINGS), pushNotifications: on };
+      setSettings(next);
+      const persisted = turnCredStoreRef.current
+        ? { ...next, iceServers: stripTurnCredentials(next.iceServers) }
+        : next;
+      await window.orpal.settings.set(persisted);
+    },
+    [settings],
+  );
+
   const reveal = useCallback((path: string) => {
     void window.orpal.files.reveal(path);
   }, []);
@@ -352,7 +424,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     brokerState,
     pendingMetrics,
     keyProtection,
-    settings: settings ?? { boards: [], iceServers: [], relayOnlyByDefault: false },
+    settings: settings ?? EMPTY_SETTINGS,
     settingsNeedRestart,
     select,
     sendText,
@@ -365,6 +437,9 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     setContactBoards,
     saveSettings,
     reveal,
+    pushEnabled,
+    pushSupported: pushIsSupported(),
+    setPushEnabled,
     migrationProgress,
     pendingIncomingMigrations,
     startMigration,

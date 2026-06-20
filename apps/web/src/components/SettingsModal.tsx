@@ -21,7 +21,22 @@ type TestState =
   | { phase: "error"; message: string };
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { settings, saveSettings, settingsNeedRestart } = useOrpal();
+  const { settings, saveSettings, settingsNeedRestart, pushEnabled, pushSupported, setPushEnabled } =
+    useOrpal();
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  const togglePush = async (on: boolean) => {
+    setPushError(null);
+    setPushBusy(true);
+    try {
+      await setPushEnabled(on);
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPushBusy(false);
+    }
+  };
   const [boards, setBoards] = useState<string[]>(
     settings.boards.length ? [...settings.boards] : [""],
   );
@@ -126,6 +141,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       boards: cleaned,
       iceServers: resolved.servers,
       relayOnlyByDefault: relayDefault,
+      // Push is toggled live above; preserve whatever it's currently set to.
+      pushNotifications: settings.pushNotifications,
     });
     setSaved(true);
   };
@@ -280,6 +297,28 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <input type="checkbox" checked={relayDefault} onChange={(e) => setRelayDefault(e.target.checked)} />
         Relay-only by default for new contacts
       </label>
+
+      <label className="field-label">Push notifications</label>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={pushEnabled}
+          disabled={!pushSupported || pushBusy}
+          onChange={(e) => void togglePush(e.target.checked)}
+        />
+        Enable push notifications {pushBusy && <span className="muted">— working…</span>}
+      </label>
+      <p className="muted">
+        When enabled, the relay board and your device’s platform provider (Apple/Google) learn that
+        this device uses Orpal and when someone tries to reach you. Your messages and keys are{" "}
+        <strong>never</strong> included in the notification — the board just wakes your device so it
+        can reconnect and pick up the waiting message. When disabled, you can only receive messages
+        while the app is open.
+      </p>
+      {!pushSupported && (
+        <p className="muted">Push isn’t supported on this device/browser.</p>
+      )}
+      {pushError && <div className="error-text">{pushError}</div>}
 
       {error && <div className="error-text">{error}</div>}
       {(saved || settingsNeedRestart) && (

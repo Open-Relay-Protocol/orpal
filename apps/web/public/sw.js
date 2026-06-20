@@ -25,6 +25,44 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/* ORPAL-016: contentless wake (ORP-009). The board fires a payload-less push on
+ * a signaling-channel timeout to wake an offline device. There is NO message
+ * content here -- the push only pokes us. We nudge any live app window to
+ * reconnect + re-announce (the broker auto-reconnects and presence re-announces
+ * on its own once the page is alive), and if the app isn't open we show a
+ * minimal notification so the user can reopen it and receive the queued message. */
+self.addEventListener("push", (event) => {
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clients) client.postMessage({ type: "orpal-wake" });
+      const anyVisible = clients.some((c) => c.visibilityState === "visible");
+      if (!anyVisible) {
+        await self.registration.showNotification("Orpal", {
+          body: "Someone is trying to reach you. Open Orpal to receive your message.",
+          tag: "orpal-wake",
+          renotify: false,
+        });
+      }
+    })(),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const existing = clients.find((c) => "focus" in c);
+      if (existing) {
+        existing.postMessage({ type: "orpal-wake" });
+        return existing.focus();
+      }
+      return self.clients.openWindow("./");
+    })(),
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;

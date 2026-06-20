@@ -9,6 +9,7 @@ import { randomBytes } from "@noble/hashes/utils";
 import { Client, ReliableChannel, b64uEncode } from "../orp.js";
 import type {
   BoardConnection,
+  ClientOptions,
   ConnectedInfo,
   DeviceIdentity,
   Outbound,
@@ -106,6 +107,13 @@ export interface OrpalClientOptions {
    *  keys are sealed at rest. If omitted, an in-memory store is used -- fine for
    *  tests, but a shell wanting cross-restart migration resume must wire this. */
   migrationKeyStore?: import("../identity/secure-store.js").SecureKeyStore;
+  /** ORPAL-016 / ORP-009: OPTIONAL opt-in platform push token (APNs/FCM token or
+   *  Web Push endpoint), obtained by the host shell from the platform push
+   *  service. When set it rides the signed presence beacon so the relay board can
+   *  fire a contentless wake on a channel timeout. Omit it (the default) and the
+   *  device is only reachable while the app is open -- no token is ever announced.
+   *  The shell can flip this at runtime via `setPushToken()`. */
+  pushToken?: string;
 }
 
 export type OrpalEvents = {
@@ -124,6 +132,11 @@ interface BoardEntry {
   id: string;
   client: Client;
   state: BrokerState;
+  /** The exact options object handed to `new Client`. We retain the reference so
+   *  `setPushToken()` can mutate `orpOpts.pushToken` in place -- the ORP client
+   *  reads `this.opts.pushToken` fresh on every `announcePresence()`, so the next
+   *  periodic beacon picks up the change without reconstructing the client. */
+  orpOpts: ClientOptions;
 }
 
 function newId(): string {
@@ -143,6 +156,9 @@ export class OrpalClient {
   private readonly presenceIntervalMs: number;
   private readonly connectTimeoutMs: number;
   private readonly ackTimeoutMs: number;
+  /** ORPAL-016: current opt-in push token (undefined => push disabled). Mirrored
+   *  into every board's `orpOpts.pushToken` so re-announces carry it. */
+  private pushTokenValue: string | undefined;
 
   private readonly contacts = new ContactRegistry();
   private readonly conns = new ConnectionManager();
@@ -162,6 +178,7 @@ export class OrpalClient {
     this.presenceIntervalMs = options.presenceIntervalMs ?? 20_000;
     this.connectTimeoutMs = options.connectTimeoutMs ?? 15_000;
     this.ackTimeoutMs = options.ackTimeoutMs ?? 30_000;
+    this.pushTokenValue = options.pushToken;
 
     const specs: BoardSpec[] =
       options.boards ?? (options.broker ? [{ id: "default", broker: options.broker }] : []);
@@ -176,12 +193,16 @@ export class OrpalClient {
             onOutbound(msg);
           }),
       };
-      const client = new Client(observingBroker, this.identity, {
+      // Retain the options object: setPushToken() mutates orpOpts.pushToken in
+      // place, and the ORP client reads it fresh on each announcePresence().
+      const orpOpts: ClientOptions = {
         boards_scope: this.boardsScope,
         webrtcFactory: (matchId, role) => this.buildEndpoint(spec.id, matchId, role),
+        pushToken: this.pushTokenValue,
         now: options.now,
-      });
-      this.boards.push({ id: spec.id, client, state: "connecting" });
+      };
+      const client = new Client(observingBroker, this.identity, orpOpts);
+      this.boards.push({ id: spec.id, client, state: "connecting", orpOpts });
     }
 
     this.conns.events.on("state", ({ contactKey, state }) => {
@@ -466,6 +487,32 @@ export class OrpalClient {
       .then((res) => this.markFile(fileId, { state: "complete", sha256: res.sha256 }, "delivered"))
       .catch((err) => { void this.markFile(fileId, { state: "failed" }, "failed"); this.events.emit("error", { error: err, context: "sendFile" }); });
     return fileId;
+  }
+
+  // ---- push notifications (ORPAL-016) --------------------------------------
+
+  /** The push token currently riding the presence beacon, or `undefined` when
+   *  push is disabled (the default). */
+  get pushToken(): string | undefined { return this.pushTokenValue; }
+
+  /** Opt in/out of wake-on-push at runtime. Pass a platform push token to start
+   *  advertising it in the signed presence (so the board can wake this device on
+   *  a channel timeout); pass `undefined` to stop -- the next beacon omits the
+   *  token entirely. A change re-announces immediately on every board so the
+   *  board's view is updated without waiting for the next interval. No-op if the
+   *  value is unchanged. */
+  setPushToken(token: string | undefined): void {
+    if (token === this.pushTokenValue) return;
+    this.pushTokenValue = token;
+    for (const board of this.boards) board.orpOpts.pushToken = token;
+    if (this.started) this.announcePresence();
+  }
+
+  /** Push a fresh presence beacon to every board right now, instead of waiting
+   *  for the next interval. Used on a push wake (ORPAL-016): the device just came
+   *  back online and wants peers to see it immediately. No-op until started. */
+  reannounce(): void {
+    if (this.started) this.announcePresence();
   }
 
   // ---- connection management -----------------------------------------------

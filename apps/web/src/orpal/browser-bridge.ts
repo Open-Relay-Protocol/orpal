@@ -161,6 +161,7 @@ async function loadSettings(): Promise<AppSettings> {
       boards: parsed.boards?.length ? parsed.boards : DEFAULT_SETTINGS.boards,
       iceServers: parsed.iceServers ?? DEFAULT_SETTINGS.iceServers,
       relayOnlyByDefault: parsed.relayOnlyByDefault ?? DEFAULT_SETTINGS.relayOnlyByDefault,
+      pushNotifications: parsed.pushNotifications ?? DEFAULT_SETTINGS.pushNotifications,
     };
   } catch {
     return DEFAULT_SETTINGS;

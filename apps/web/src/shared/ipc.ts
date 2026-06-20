@@ -30,6 +30,11 @@ export interface AppSettings {
   boards: string[];
   iceServers: IceServer[];
   relayOnlyByDefault: boolean;
+  /** ORPAL-016: opt-in wake-on-push. When true, the shell registers with the
+   *  platform push service and advertises the token in presence so the board can
+   *  wake this device while the app is closed. Off by default (no token leaves
+   *  the device; you're only reachable while the app is open). */
+  pushNotifications: boolean;
 }
 
 export interface FilePick {
@@ -128,4 +133,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // relay-only contacts you MUST add a TURN server with credentials.
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
   relayOnlyByDefault: false,
+  // Off by default: opting in is a deliberate privacy trade-off (see Settings).
+  pushNotifications: false,
 };
