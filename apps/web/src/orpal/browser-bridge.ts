@@ -187,6 +187,8 @@ const bridge: OrpalBridge = {
       if (!existing) return;
       await put(STORE_MESSAGES, { ...existing, ...patch });
     },
+    // O(1) primary-key get (STORE_MESSAGES keyPath is "id") — issue #34.
+    getMessage: (id: string) => get<StoredMessage>(STORE_MESSAGES, id),
     listMessages: async (contactKey: string, opts: ListMessagesOptions = {}) => {
       let rows = await getAllByIndex<StoredMessage>(STORE_MESSAGES, "contactKey", contactKey);
       if (opts.before !== undefined) rows = rows.filter((m) => m.ts < opts.before!);

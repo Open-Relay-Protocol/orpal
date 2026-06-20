@@ -85,13 +85,19 @@ export interface ConversationStore {
     id: string,
     patch: Partial<Pick<StoredMessage, "state" | "text" | "file">>,
   ): Promise<void>;
+  /** Fetch a single message by its app-level id, or null if unknown. O(1) via the
+   *  store's primary key (IndexedDB `get` / in-memory Map) — avoids an O(n)
+   *  `listMessages().find()` scan on every delivery-state transition (issue #34). */
+  getMessage(id: string): Promise<StoredMessage | null>;
   listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;
 }
 
 /** An in-memory ConversationStore for tests and quick spikes. */
 export class InMemoryConversationStore implements ConversationStore {
   private contacts = new Map<string, Contact>();
-  private messages: StoredMessage[] = [];
+  /** Keyed by message id so `getMessage` is an O(1) lookup (issue #34). JS Maps
+   *  preserve insertion order; `listMessages` sorts by `ts` regardless. */
+  private messages = new Map<string, StoredMessage>();
 
   async init(): Promise<void> {}
 
@@ -109,17 +115,21 @@ export class InMemoryConversationStore implements ConversationStore {
   }
 
   async appendMessage(message: StoredMessage): Promise<void> {
-    this.messages.push({ ...message });
+    this.messages.set(message.id, { ...message });
   }
   async updateMessage(
     id: string,
     patch: Partial<Pick<StoredMessage, "state" | "text" | "file">>,
   ): Promise<void> {
-    const m = this.messages.find((x) => x.id === id);
+    const m = this.messages.get(id);
     if (m) Object.assign(m, patch);
   }
+  async getMessage(id: string): Promise<StoredMessage | null> {
+    const m = this.messages.get(id);
+    return m ? { ...m } : null;
+  }
   async listMessages(contactKey: string, opts: ListMessagesOptions = {}): Promise<StoredMessage[]> {
-    let rows = this.messages.filter((m) => m.contactKey === contactKey);
+    let rows = [...this.messages.values()].filter((m) => m.contactKey === contactKey);
     if (opts.before !== undefined) rows = rows.filter((m) => m.ts < opts.before!);
     rows = rows.sort((a, b) => b.ts - a.ts);
     if (opts.limit !== undefined) rows = rows.slice(0, opts.limit);

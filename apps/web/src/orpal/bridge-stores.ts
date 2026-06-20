@@ -79,6 +79,9 @@ export class IpcConversationStore implements ConversationStore {
   updateMessage(id: string, patch: MessagePatch): Promise<void> {
     return window.orpal.store.updateMessage(id, patch);
   }
+  getMessage(id: string): Promise<StoredMessage | null> {
+    return window.orpal.store.getMessage(id);
+  }
   listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]> {
     return window.orpal.store.listMessages(contactKey, opts);
   }

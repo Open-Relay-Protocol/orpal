@@ -74,6 +74,7 @@ export interface OrpalBridge {
     removeContact(identityKey: string): Promise<void>;
     appendMessage(message: StoredMessage): Promise<void>;
     updateMessage(id: string, patch: MessagePatch): Promise<void>;
+    getMessage(id: string): Promise<StoredMessage | null>;
     listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;
   };
   /** Durable offline send-queue (IndexedDB in the browser shell): outbound
