@@ -21,6 +21,7 @@ import { BrowserWebRTCEndpoint } from "../rtc/browser-webrtc.js";
 import type { Contact } from "../contacts/contact.js";
 import { contactFromCard, parseContactCard, serializeContactCard } from "../contacts/contact.js";
 import type { ConversationStore, StoredMessage } from "../persistence/conversation-store.js";
+import { InMemoryKeyStore } from "../identity/secure-store.js";
 import {
   decodeAppFrame,
   encodeAppFrame,
@@ -100,6 +101,11 @@ export interface OrpalClientOptions {
   now?: () => string;
   migrationStore?: MigrationStore;
   keyStore?: import("../identity/secure-store.js").SecureKeyStore;
+  /** ORPAL-013: a SEPARATE sealed key store for the pending new identity during a
+   *  migration. Should be a HardwareBackedKeyStore over its own slot so the new
+   *  keys are sealed at rest. If omitted, an in-memory store is used — fine for
+   *  tests, but a shell wanting cross-restart migration resume must wire this. */
+  migrationKeyStore?: import("../identity/secure-store.js").SecureKeyStore;
 }
 
 export type OrpalEvents = {
@@ -206,6 +212,9 @@ export class OrpalClient {
     if (this.opts.migrationStore && this.opts.keyStore) {
       this.migration = new MigrationManager({
         keyStore: this.opts.keyStore,
+        // ORPAL-013: keep the pending new identity's keys in their own sealed
+        // slot. Default to in-memory when a shell doesn't wire one (tests).
+        pendingKeyStore: this.opts.migrationKeyStore ?? new InMemoryKeyStore(),
         migrationStore: this.opts.migrationStore,
         now: this.opts.now,
       });

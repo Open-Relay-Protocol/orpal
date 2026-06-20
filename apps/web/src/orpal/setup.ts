@@ -14,6 +14,7 @@ import {
   IpcConversationStore,
   IpcKeyBlobStore,
   IpcMigrationStore,
+  IpcPendingKeyBlobStore,
   IpcPendingQueueStore,
   createIncomingFileSink,
 } from "./bridge-stores.js";
@@ -36,9 +37,20 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   // The keyStore stays a plain SecureKeyStore, so OrpalClient/IdentityManager are
   // unchanged either way.
   const hardwareProvider = await createHardwareKeyProvider();
-  const keyStore = new HardwareBackedKeyStore(new IpcKeyBlobStore(), hardwareProvider, (err) =>
+  const onSealFallback = (err: unknown) =>
     // eslint-disable-next-line no-console
-    console.warn("[orpal] secure-hardware key sealing unavailable; stored in cleartext", err),
+    console.warn("[orpal] secure-hardware key sealing unavailable; stored in cleartext", err);
+  const keyStore = new HardwareBackedKeyStore(
+    new IpcKeyBlobStore(),
+    hardwareProvider,
+    onSealFallback,
+  );
+  // ORPAL-013: seal the migration's pending new identity through the same path,
+  // over its own slot, so those keys are never written in cleartext either.
+  const migrationKeyStore = new HardwareBackedKeyStore(
+    new IpcPendingKeyBlobStore(),
+    hardwareProvider,
+    onSealFallback,
   );
   const { identity, created } = await IdentityManager.loadOrCreate(keyStore);
 
@@ -71,6 +83,7 @@ export async function createOrpalApp(): Promise<OrpalApp> {
     createFileSink: (offer) => createIncomingFileSink(offer),
     migrationStore: new IpcMigrationStore(),
     keyStore,
+    migrationKeyStore,
   });
   app = orpal;
 
