@@ -85,7 +85,7 @@ export class SealedCredentialStore {
         await kvSet(TURN_CRED_KV, envelope);
         return;
       } catch (err) {
-        // Advertised but sealing failed (prompt dismissed, PRF unsupported) —
+        // Advertised but sealing failed (prompt dismissed, PRF unsupported) --
         // fall back to cleartext so credentials are still persisted.
         this.onFallback?.(err);
       }
@@ -117,7 +117,7 @@ export function extractTurnCredentials(servers: IceServer[]): TurnCredentials {
   return creds;
 }
 
-/** Return a copy of the servers with TURN secrets removed — the non-secret shape
+/** Return a copy of the servers with TURN secrets removed -- the non-secret shape
  *  safe to persist in AppSettings (localStorage). */
 export function stripTurnCredentials(servers: IceServer[]): IceServer[] {
   return servers.map((s) => {

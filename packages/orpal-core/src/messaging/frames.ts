@@ -3,13 +3,13 @@
 // ReliableChannel.send(body: string) / onMessage(text) gives us ONE ordered-ish,
 // ACK'd string pipe per contact. Orpal multiplexes text messages and file
 // transfers over it with this small JSON envelope. Each frame is one send() call,
-// so each gets its own §11 one-time-key ACK — that ACK is exactly our delivery
+// so each gets its own §11 one-time-key ACK -- that ACK is exactly our delivery
 // receipt (text) and our per-chunk flow-control signal (files).
 //
 // We own ordering/idempotency here, because the protocol does not (SPEC §11.4):
 //   * every frame carries an id (message id, or fileId+chunk index),
 //   * the receiver dedupes file chunks by (fileId, index),
-//   * chunk order on the wire doesn't matter — the receiver writes by offset.
+//   * chunk order on the wire doesn't matter -- the receiver writes by offset.
 
 export const APP_FRAME_VERSION = 1 as const;
 
@@ -26,7 +26,7 @@ export interface TextFrame {
  * Application-level acknowledgement ("awk") of a delivered message.
  *
  * The ReliableChannel's §11 one-time-key ACK only proves a frame reached the
- * peer's channel layer — it says nothing about the app having durably accepted
+ * peer's channel layer -- it says nothing about the app having durably accepted
  * the message. For offline/store-and-forward delivery (see pending-queue.ts) the
  * SENDER keeps a message queued and retrying until the RECIPIENT confirms it has
  * stored the message by sending this awk back over the same channel.
@@ -87,8 +87,8 @@ export const SEAL_ALG = "orp-sealedbox-v1" as const;
  * A recipient-sealed envelope (issue #23).
  *
  * The inner app frame (a {@link TextFrame} or {@link FileOfferFrame}) is
- * serialized and sealed to the recipient's PINNED X25519 transport key — the one
- * carried in their out-of-band-verified contact card — with the ORP anonymous
+ * serialized and sealed to the recipient's PINNED X25519 transport key -- the one
+ * carried in their out-of-band-verified contact card -- with the ORP anonymous
  * sealed box (orp.ts `seal`). Only the holder of that transport private key can
  * open it, so a wrong-key / fake-peer connection can never read the contents.
  * The data channel is already end-to-end encrypted by the SecureChannel; this

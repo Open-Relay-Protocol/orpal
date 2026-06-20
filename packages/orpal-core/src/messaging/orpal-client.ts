@@ -103,7 +103,7 @@ export interface OrpalClientOptions {
   keyStore?: import("../identity/secure-store.js").SecureKeyStore;
   /** ORPAL-013: a SEPARATE sealed key store for the pending new identity during a
    *  migration. Should be a HardwareBackedKeyStore over its own slot so the new
-   *  keys are sealed at rest. If omitted, an in-memory store is used — fine for
+   *  keys are sealed at rest. If omitted, an in-memory store is used -- fine for
    *  tests, but a shell wanting cross-restart migration resume must wire this. */
   migrationKeyStore?: import("../identity/secure-store.js").SecureKeyStore;
 }

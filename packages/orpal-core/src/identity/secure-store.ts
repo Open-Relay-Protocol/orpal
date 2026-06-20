@@ -9,7 +9,7 @@ import { b64uDecode, b64uEncode } from "../orp.js";
 
 /** The only material an identity needs to be reconstructed via
  *  `DeviceIdentity.fromPrivateKeys`. These bytes are SECRET and must live ONLY in
- *  OS-native secure storage — never in plain files, logs, or the renderer's own
+ *  OS-native secure storage -- never in plain files, logs, or the renderer's own
  *  storage. */
 export interface StoredKeys {
   /** b64u Ed25519 signing (identity) private key. */
@@ -35,13 +35,13 @@ export interface SecureKeyStore {
 // The plain SecureKeyStore above persists `StoredKeys` as-is. On a platform with
 // secure hardware we want the private keys to never sit at rest in cleartext:
 // instead they're sealed by a key that lives in (and never leaves) the device's
-// secure element — Apple Secure Enclave, Android Keystore / StrongBox, or a
+// secure element -- Apple Secure Enclave, Android Keystore / StrongBox, or a
 // Windows TPM (reached from the browser/WebView via a WebAuthn platform
 // authenticator with the PRF extension). When no such hardware is present we
 // transparently fall back to the existing cleartext path.
 //
 // The pieces below keep that capability OUT of core's runtime (core stays
-// DOM/Capacitor-agnostic): core only defines the seam — a `HardwareKeyProvider`
+// DOM/Capacitor-agnostic): core only defines the seam -- a `HardwareKeyProvider`
 // a shell implements, and a `HardwareBackedKeyStore` decorator that uses it when
 // available and falls back when it isn't. Crucially the decorator IS a
 // `SecureKeyStore`, so every existing caller (IdentityManager, OrpalClient's
@@ -72,7 +72,7 @@ export function isSecureEnvelope(value: PersistedKeys): value is SecureEnvelope 
 }
 
 /** The low-level slot the `HardwareBackedKeyStore` reads/writes. It persists
- *  whichever `PersistedKeys` shape it's given — a shell backs this with the same
+ *  whichever `PersistedKeys` shape it's given -- a shell backs this with the same
  *  store it already uses for keys (IndexedDB in the browser, Keychain/Keystore on
  *  native). Identical in spirit to `SecureKeyStore`, but its value type is the
  *  `PersistedKeys` union so it can hold a sealed envelope too. */
@@ -106,12 +106,12 @@ const textDecoder = new TextDecoder();
  * when it's available, and otherwise stores them in cleartext exactly as before.
  *
  * Behaviour:
- *  - `save` — if a provider is present and reports availability, the keys are
+ *  - `save` -- if a provider is present and reports availability, the keys are
  *    JSON-serialized and sealed into a {@link SecureEnvelope}. If sealing throws
  *    for any reason (e.g. the platform authenticator is dismissed, or PRF turns
  *    out to be unsupported), it falls back to writing cleartext so a save never
- *    loses the identity — the same durability the cleartext path always had.
- *  - `load` — a cleartext value is returned as-is; a sealed envelope is unsealed
+ *    loses the identity -- the same durability the cleartext path always had.
+ *  - `load` -- a cleartext value is returned as-is; a sealed envelope is unsealed
  *    via the provider. An envelope with no available provider is a hard error
  *    (the keys exist but can't be reached on this device) rather than silent loss.
  */
@@ -131,7 +131,7 @@ export class HardwareBackedKeyStore implements SecureKeyStore {
       // Cleartext: either a hardware-less device, or an install that predates
       // ORPAL-007 whose keys were written before a provider existed. If secure
       // hardware is available now, opportunistically re-seal so existing installs
-      // stop leaving keys in cleartext — without this, an upgraded user's keys
+      // stop leaving keys in cleartext -- without this, an upgraded user's keys
       // would never migrate (loadOrCreate returns early on the first load).
       await this.resealIfPossible(stored);
       return stored;
@@ -149,7 +149,7 @@ export class HardwareBackedKeyStore implements SecureKeyStore {
 
   /** Best-effort upgrade of a cleartext slot to a hardware-sealed envelope.
    *  Reuses `save` (which seals when the provider is available and otherwise
-   *  no-ops back to cleartext), and never throws into the load path — a failed
+   *  no-ops back to cleartext), and never throws into the load path -- a failed
    *  reseal just leaves the existing cleartext value and is retried next load. */
   private async resealIfPossible(keys: StoredKeys): Promise<void> {
     if (!this.provider) return;
@@ -174,7 +174,7 @@ export class HardwareBackedKeyStore implements SecureKeyStore {
         await this.slot.save(envelope);
         return;
       } catch (err) {
-        // Secure hardware was advertised but sealing failed — fall back to the
+        // Secure hardware was advertised but sealing failed -- fall back to the
         // cleartext path so the identity is still persisted (never bricked).
         this.onFallback?.(err);
       }
@@ -187,7 +187,7 @@ export class HardwareBackedKeyStore implements SecureKeyStore {
   }
 }
 
-/** An in-memory SecureKeyStore — for tests and ephemeral sessions ONLY. It keeps
+/** An in-memory SecureKeyStore -- for tests and ephemeral sessions ONLY. It keeps
  *  keys in process memory, providing none of the OS-keychain protection the real
  *  shells do. Never use it to persist a real identity. */
 export class InMemoryKeyStore implements SecureKeyStore {

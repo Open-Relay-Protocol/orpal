@@ -148,7 +148,7 @@ export class MigrationManager {
     this.state = await this.migrationStore.load();
     if (!this.state || this.state.phase === "complete") return;
 
-    // Reconstruct the pending new identity from its sealed slot (ORPAL-013) —
+    // Reconstruct the pending new identity from its sealed slot (ORPAL-013) --
     // the private keys live in pendingKeyStore, hardware-sealed like the main
     // identity, never in the migration store.
     const stored = await this.pendingKeyStore.load();
@@ -269,7 +269,7 @@ export class MigrationManager {
     // which re-seals them through its own HardwareBackedKeyStore, then drop the
     // pending slot.
     const stored = await this.pendingKeyStore.load();
-    if (!stored) return; // pending keys missing — cannot safely retire
+    if (!stored) return; // pending keys missing -- cannot safely retire
     await this.keyStore.clear();
     await this.keyStore.save(stored);
     await this.pendingKeyStore.clear();

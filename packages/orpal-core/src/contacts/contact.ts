@@ -1,18 +1,18 @@
 // Contacts and contact cards.
 //
-// A device's address is its Ed25519 identity key (SPEC §2 — the only required
+// A device's address is its Ed25519 identity key (SPEC §2 -- the only required
 // identifier). A contact CARD additionally carries the X25519 transport key and
 // its signed binding so the importer can pin and verify them out-of-band. The
 // transport key is deliberately NOT broadcast in presence/intent (§2,
 // anti-harvesting); sharing it face-to-face via a QR code / paste is the intended
 // channel. On import we ALWAYS verify the binding and that it ties this identity
-// key to this transport key — the same check a peer runs before sealing (§2.1).
+// key to this transport key -- the same check a peer runs before sealing (§2.1).
 
 import { verifyBinding } from "../orp.js";
 import type { KeyBinding, PublicIdentity } from "../orp.js";
 
 export interface Contact {
-  /** b64u Ed25519 identity public key — the routing address. */
+  /** b64u Ed25519 identity public key -- the routing address. */
   identityKey: string;
   /** b64u X25519 transport public key (bound to identityKey). */
   transportKey: string;
@@ -25,8 +25,8 @@ export interface Contact {
    * Per-contact board routing (issue #19). Board ids (the web shell uses the
    * board URL as its id) this contact is reachable on. When BOTH lists are empty
    * / undefined, delivery fans out to ALL configured boards (the global default).
-   * When set, delivery attempts use ONLY these boards — preferred first, then
-   * fallback — so a contact known to live on a specific board isn't announced to
+   * When set, delivery attempts use ONLY these boards -- preferred first, then
+   * fallback -- so a contact known to live on a specific board isn't announced to
    * every board.
    */
   preferredBoards?: string[];
@@ -71,7 +71,7 @@ export function serializeContactCard(pub: PublicIdentity, name?: string): string
  * Parse and FULLY VALIDATE a scanned/pasted contact card. Returns
  * `{ valid:false, reason }` rather than throwing so the UI can show a clear
  * error. A card only validates if its binding is a correct self-signature AND it
- * ties the advertised identity key to the advertised transport key — this is the
+ * ties the advertised identity key to the advertised transport key -- this is the
  * anti-substitution guarantee: nobody can hand you a card pairing someone's
  * identity with an attacker-chosen transport key.
  */

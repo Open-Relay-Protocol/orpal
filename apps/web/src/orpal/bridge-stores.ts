@@ -60,7 +60,7 @@ export class IpcKeyBlobStore implements KeyBlobStore {
 /** ORPAL-013: the raw key slot for the PENDING new identity during a migration.
  *  A distinct IndexedDB KV slot from the main `deviceKeys` slot, so wrapping it in
  *  a HardwareBackedKeyStore seals the migration's new keys at rest exactly like
- *  the main identity — they never sit in the migration store in cleartext. */
+ *  the main identity -- they never sit in the migration store in cleartext. */
 export class IpcPendingKeyBlobStore implements KeyBlobStore {
   load(): Promise<PersistedKeys | null> {
     return kvGet<PersistedKeys>(PENDING_KEYS_KV);

@@ -1,7 +1,7 @@
 /* =========================================================================
-   Orpal — "Winamp Classic" skin in ORP cobalt blue (logo + crab mascot brand).
+   Orpal -- "Winamp Classic" skin in ORP cobalt blue (logo + crab mascot brand).
    Gunmetal bevels, a black-and-blue LCD, a spectrum analyzer, and a scrolling
-   track ticker. Purely cosmetic — every class the components use is preserved.
+   track ticker. Purely cosmetic -- every class the components use is preserved.
    ========================================================================= */
 :root {
   --metal-hi: #6e7484;
@@ -151,7 +151,7 @@ textarea.mono,
   padding-right: env(safe-area-inset-right);
 }
 
-/* "Back to contacts" affordance — only meaningful in the single-pane phone
+/* "Back to contacts" affordance -- only meaningful in the single-pane phone
    layout, so it's hidden until the mobile breakpoint reveals it. */
 .convo-back {
   display: none;
@@ -383,7 +383,7 @@ textarea.mono,
   color: #cfddf8;
 }
 
-/* info footer — the ORP logo lives here, not as a brand mark */
+/* info footer -- the ORP logo lives here, not as a brand mark */
 .sidebar-foot {
   display: flex;
   align-items: center;
@@ -872,7 +872,7 @@ textarea.mono,
 .ice-test-result .warn { color: #ffd27a; }
 
 /* =========================================================================
-   Responsive — phones, foldables, and tablets.
+   Responsive -- phones, foldables, and tablets.
 
    Phones (and a folded foldable's narrow outer screen) show ONE pane at a time:
    the contact list, or the open conversation reached by tapping a contact and

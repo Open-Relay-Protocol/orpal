@@ -6,14 +6,14 @@
 // a real ICE + DTLS + SCTP data channel using the RTCPeerConnection the browser /
 // Capacitor WebView already provides. It conforms to the reference's
 // `WebRTCEndpoint` interface unchanged, so the reference Client drives it with no
-// modification — swapping the factory is the whole integration.
+// modification -- swapping the factory is the whole integration.
 //
 // SECURITY POSITION (unchanged from the protocol):
 //   * This endpoint gathers and returns ALL candidates verbatim. The privacy
 //     controls run in the reference Client BEFORE anything is sealed/sent:
 //     filterCandidates + filterSdp + assertNoUnobfuscatedHost (control b), then
 //     seal to the peer's X25519 key (control a). We deliberately do NOT filter
-//     here — doing so would split that responsibility and risk it drifting.
+//     here -- doing so would split that responsibility and risk it drifting.
 //   * Two devices behind NAT need a STUN server to produce an `srflx` candidate
 //     (raw `host` IPs are dropped by control b), or a TURN server for `relay`.
 //     `iceTransportPolicy: "relay"` is the SPEC §6 relay-only mode for
@@ -38,7 +38,7 @@ export interface BrowserWebRTCOptions {
    *  Default 4000ms. */
   iceGatheringTimeoutMs?: number;
   /** Notified on every aggregate connection-state change. OrpalClient uses this
-   *  to mark contacts online/offline and re-initiate rendezvous on drops — the
+   *  to mark contacts online/offline and re-initiate rendezvous on drops -- the
    *  reference Client interface itself surfaces no such event. */
   onConnectionStateChange?: (state: RtcConnectionState) => void;
   /** Label for the data channel (cosmetic; both peers negotiate one channel). */
@@ -99,7 +99,7 @@ export class BrowserWebRTCEndpoint implements WebRTCEndpoint {
       else if (data instanceof ArrayBuffer) bytes = new Uint8Array(data);
       else if (ArrayBuffer.isView(data)) {
         bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-      } else return; // Blob etc. — not used by this protocol
+      } else return; // Blob etc. -- not used by this protocol
       this.dataCb?.(bytes);
     };
     if (channel.readyState === "open") this.resolveChannelOpen();
@@ -139,8 +139,8 @@ export class BrowserWebRTCEndpoint implements WebRTCEndpoint {
       try {
         await this.pc.addIceCandidate({ candidate: c, sdpMLineIndex: 0 });
       } catch {
-        // A candidate scrubbed by control (b) (e.g. raddr → 0.0.0.0) or otherwise
-        // unparseable is skipped — connectivity only needs one working pair.
+        // A candidate scrubbed by control (b) (e.g. raddr -> 0.0.0.0) or otherwise
+        // unparseable is skipped -- connectivity only needs one working pair.
       }
     }
   }
@@ -160,7 +160,7 @@ export class BrowserWebRTCEndpoint implements WebRTCEndpoint {
     this.channel.send(bytes as unknown as ArrayBuffer);
   }
 
-  /** Current data-channel send-buffer depth — used for optional flow control on
+  /** Current data-channel send-buffer depth -- used for optional flow control on
    *  top of the ACK-gated backpressure in the file-transfer layer. */
   bufferedAmount(): number {
     return this.channel?.bufferedAmount ?? 0;

@@ -1,17 +1,17 @@
 // Local conversation persistence abstraction.
 //
 // The protocol stores NOTHING (no store-and-forward; the board is RAM-only and
-// blind — SPEC §0/§9.1), so durable history is entirely the app's job. orpal-core
+// blind -- SPEC §0/§9.1), so durable history is entirely the app's job. orpal-core
 // defines the interface; a shell supplies the implementation (web: IndexedDB;
 // Android: a Capacitor SQLite plugin). Keeping it behind this
-// interface lets both shells — and the tests — reuse the messaging layer.
+// interface lets both shells -- and the tests -- reuse the messaging layer.
 
 import type { Contact } from "../contacts/contact.js";
 
 /**
  * Lifecycle of an OUTBOUND message (issue #22). Two distinct receipts are
- * surfaced: the transport-level §11 one-time-key ACK ("delivered" — the frame
- * reached the peer's channel) and the app-level awk ("acknowledged" — the peer
+ * surfaced: the transport-level §11 one-time-key ACK ("delivered" -- the frame
+ * reached the peer's channel) and the app-level awk ("acknowledged" -- the peer
  * stored/displayed it). "queued" is the durable offline-queue state before any
  * successful dispatch.
  */
@@ -86,7 +86,7 @@ export interface ConversationStore {
     patch: Partial<Pick<StoredMessage, "state" | "text" | "file">>,
   ): Promise<void>;
   /** Fetch a single message by its app-level id, or null if unknown. O(1) via the
-   *  store's primary key (IndexedDB `get` / in-memory Map) — avoids an O(n)
+   *  store's primary key (IndexedDB `get` / in-memory Map) -- avoids an O(n)
    *  `listMessages().find()` scan on every delivery-state transition (issue #34). */
   getMessage(id: string): Promise<StoredMessage | null>;
   listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;

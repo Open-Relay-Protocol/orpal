@@ -6,7 +6,7 @@
 // the SAME `RendezvousBroker` interface from core/protocol.ts, opens a `wss://`
 // (or `ws://`) connection with the platform's native `WebSocket`, and
 // (de)serializes the SPEC §4.4 Inbound/Outbound envelope as one JSON text frame
-// each. It is a TRANSPORT only — it never inspects `relay` blobs (opaque,
+// each. It is a TRANSPORT only -- it never inspects `relay` blobs (opaque,
 // end-to-end-sealed; SPEC §0) and carries zero protocol semantics, so it adds no
 // copyleft obligation and reuses the protocol's own types.
 //
@@ -50,7 +50,7 @@ export interface BrowserBrokerOptions {
   /** WebSocket constructor. Defaults to the global `WebSocket`. Inject for tests
    *  or non-standard environments. */
   WebSocketImpl?: WebSocketCtor;
-  /** Lifecycle hooks — connection state only, never routed contents (SPEC §0/§8). */
+  /** Lifecycle hooks -- connection state only, never routed contents (SPEC §0/§8). */
   onOpen?: () => void;
   onClose?: (info: { code: number; reason: string; willReconnect: boolean }) => void;
   onError?: (err: unknown) => void;
@@ -111,7 +111,7 @@ class BrowserBoardConnection implements BoardConnection {
 
   // ---- BoardConnection -----------------------------------------------------
 
-  /** client → board. Buffered until the socket is OPEN, then flushed in order. */
+  /** client -> board. Buffered until the socket is OPEN, then flushed in order. */
   send(msg: Inbound): void {
     if (this.closedByCaller) return;
     if (this.ws && this.ws.readyState === WS_OPEN) {

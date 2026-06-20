@@ -3,15 +3,15 @@
 // The shared React UI talks only to `window.orpal`; this module backs that typed
 // contract with browser primitives:
 //
-//   keys     → IndexedDB           (see the security note below)
-//   store    → IndexedDB
-//   files    → File System Access pick for SEND; in-memory reassembly + a
+//   keys     -> IndexedDB           (see the security note below)
+//   store    -> IndexedDB
+//   files    -> File System Access pick for SEND; in-memory reassembly + a
 //              browser download for RECEIVE (no unprompted disk streaming exists
-//              on the web, so incoming files buffer in memory — see the note)
-//   settings → localStorage (TURN credentials are NOT here — ORPAL-014 seals them
+//              on the web, so incoming files buffer in memory -- see the note)
+//   settings -> localStorage (TURN credentials are NOT here -- ORPAL-014 seals them
 //              separately via SealedCredentialStore; localStorage holds only URLs)
-//   clipboard→ navigator.clipboard
-//   input    → unsupported (the QR code + manual-copy field already cover this)
+//   clipboard-> navigator.clipboard
+//   input    -> unsupported (the QR code + manual-copy field already cover this)
 //
 // Because the UI depends only on `window.orpal`, installing this bridge lets the
 // identical React UI + orpal-core run in any modern Chromium browser, installable
@@ -21,8 +21,8 @@
 // SECURITY NOTE: a browser has no OS keychain. By default private keys live in
 // IndexedDB, which is origin-scoped and not readable by other sites, but is NOT
 // hardware/OS-protected. When the device exposes a WebAuthn platform
-// authenticator (ORPAL-007), the keys are instead sealed to its secure element —
-// Secure Enclave / Android Keystore-StrongBox / Windows TPM — before they touch
+// authenticator (ORPAL-007), the keys are instead sealed to its secure element --
+// Secure Enclave / Android Keystore-StrongBox / Windows TPM -- before they touch
 // IndexedDB (see webauthn-keystore.ts + HardwareBackedKeyStore in core); the
 // IndexedDB slot then holds only hardware-bound ciphertext. Where no such
 // hardware exists this falls back to the cleartext slot, so treat that case as
@@ -104,7 +104,7 @@ function pickFile(): Promise<FilePick | null> {
         const file = input.files?.[0];
         cleanup();
         if (!file) return resolve(null);
-        // No real path on the web — a synthetic id stands in for it and keys the
+        // No real path on the web -- a synthetic id stands in for it and keys the
         // cached File (openRead/readChunk look it up by this "path").
         const path = crypto.randomUUID();
         pickedFiles.set(path, file);
@@ -124,7 +124,7 @@ function pickFile(): Promise<FilePick | null> {
 // ---- file RECEIVE side: incoming bytes reassemble in memory, then download ----
 interface WriteEntry {
   name: string;
-  // offset → bytes; the engine writes idempotently and possibly out of order.
+  // offset -> bytes; the engine writes idempotently and possibly out of order.
   chunks: Map<number, Uint8Array>;
 }
 const writes = new Map<string, WriteEntry>();
@@ -188,7 +188,7 @@ const bridge: OrpalBridge = {
       if (!existing) return;
       await put(STORE_MESSAGES, { ...existing, ...patch });
     },
-    // O(1) primary-key get (STORE_MESSAGES keyPath is "id") — issue #34.
+    // O(1) primary-key get (STORE_MESSAGES keyPath is "id") -- issue #34.
     getMessage: (id: string) => get<StoredMessage>(STORE_MESSAGES, id),
     listMessages: async (contactKey: string, opts: ListMessagesOptions = {}) => {
       let rows = await getAllByIndex<StoredMessage>(STORE_MESSAGES, "contactKey", contactKey);
@@ -220,7 +220,7 @@ const bridge: OrpalBridge = {
     openRead: async (path: string): Promise<ReadHandle> => {
       const file = pickedFiles.get(path);
       if (!file) throw new Error(`web file bridge: no picked file ${path}`);
-      // The "path" doubles as the handleId on the web — the File stays cached.
+      // The "path" doubles as the handleId on the web -- the File stays cached.
       return { handleId: path, name: file.name, size: file.size, mime: mimeFor(file.name, file.type) };
     },
 
@@ -250,7 +250,7 @@ const bridge: OrpalBridge = {
     openWrite: async (name: string): Promise<WriteHandle> => {
       const handleId = crypto.randomUUID();
       writes.set(handleId, { name, chunks: new Map() });
-      // No real filesystem path on the web — surface the chosen name.
+      // No real filesystem path on the web -- surface the chosen name.
       return { handleId, path: name };
     },
 

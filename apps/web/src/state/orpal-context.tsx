@@ -194,7 +194,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         const hist = await orpal.history(key, { limit: 500 });
         setMessagesByContact((prev) => ({ ...prev, [key]: [...hist].reverse() }));
         orpal.connect(key).catch(() => {
-          /* offline — surfaced via the connection event */
+          /* offline -- surfaced via the connection event */
         });
       })();
     },

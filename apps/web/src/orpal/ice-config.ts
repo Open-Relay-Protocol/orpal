@@ -1,7 +1,7 @@
 // ICE-server config helpers for the Settings UI (issue #25).
 //
 // This is PRESENTATION ONLY. The persisted value remains the same
-// `IceServer[]` that `BrowserWebRTCEndpoint` already consumes — these helpers
+// `IceServer[]` that `BrowserWebRTCEndpoint` already consumes -- these helpers
 // just let the UI offer a friendly form instead of raw JSON, and validate /
 // reachability-test what the user typed. Nothing here touches the ORP envelope,
 // sealing, ICE filtering, or `assertNoUnobfuscatedHost`; the connection test
@@ -130,14 +130,14 @@ export function parseIceJson(
 }
 
 // ---------------------------------------------------------------------------
-// "Test connection" — gather ICE candidates against the configured servers and
+// "Test connection" -- gather ICE candidates against the configured servers and
 // report STUN/TURN reachability. Privacy: we only ever read candidate *types*
 // (host / srflx / relay), never their addresses, and nothing is sent anywhere.
 // ---------------------------------------------------------------------------
 
 export interface IceTestResult {
-  srflx: boolean; // a server-reflexive candidate → STUN reachable
-  relay: boolean; // a relay candidate → TURN relay obtained
+  srflx: boolean; // a server-reflexive candidate -> STUN reachable
+  relay: boolean; // a relay candidate -> TURN relay obtained
   host: boolean;
   candidateCount: number;
   /** Per-server gathering errors (e.g. TURN allocate failed). */

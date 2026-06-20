@@ -128,7 +128,7 @@ export function Sidebar(props: {
   );
 }
 
-/** A compact "Xs / Xm / Xh ago" for a queue timestamp (null → em dash). */
+/** A compact "Xs / Xm / Xh ago" for a queue timestamp (null -> em dash). */
 function formatAge(ts: number | null): string {
   if (ts === null) return "—";
   const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));

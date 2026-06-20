@@ -1,12 +1,12 @@
 // File transfer over the message layer.
 //
-// Files are chunked and framed (file-offer → file-chunk* → file-done; see
+// Files are chunked and framed (file-offer -> file-chunk* -> file-done; see
 // frames.ts), sent over the per-contact ReliableChannel, reassembled and
 // integrity-verified (per-file SHA-256) on the receiver. Because the protocol
 // does NOT dedupe, reorder, or auto-retry (SPEC §11.4), this layer owns all of
 // that itself:
 //   * delivery: each frame is one ACK'd send(); a chunk isn't considered sent
-//     until its ACK returns — that ACK IS the backpressure signal.
+//     until its ACK returns -- that ACK IS the backpressure signal.
 //   * flow control: a bounded sliding WINDOW of in-flight chunks (so we never
 //     dump a whole file into the data channel's send buffer at once).
 //   * retry: a timed-out chunk is retried a bounded number of times; the receiver
@@ -244,9 +244,9 @@ export class FileReceiver {
   constructor(private readonly cb: FileReceiverCallbacks) {}
 
   async onOffer(offer: FileOfferFrame): Promise<void> {
-    if (this.files.has(offer.fileId)) return; // duplicate offer — keep the first
+    if (this.files.has(offer.fileId)) return; // duplicate offer -- keep the first
     // Register SYNCHRONOUSLY so chunks racing ahead of the (async) sink creation
-    // are buffered, not dropped — the recipient's ReliableChannel acks the offer
+    // are buffered, not dropped -- the recipient's ReliableChannel acks the offer
     // immediately (SPEC §11.4#4), so the sender may start chunking before
     // createSink() resolves.
     const f: ReceivingFile = {
@@ -286,13 +286,13 @@ export class FileReceiver {
 
   async onChunk(chunk: FileChunkFrame): Promise<void> {
     const f = this.files.get(chunk.fileId);
-    if (!f) return; // chunk for an unknown/finished file — drop
-    if (chunk.i < 0 || chunk.i >= f.offer.chunks) return; // out of range — drop
-    if (f.received.has(chunk.i)) return; // duplicate — idempotent no-op
+    if (!f) return; // chunk for an unknown/finished file -- drop
+    if (chunk.i < 0 || chunk.i >= f.offer.chunks) return; // out of range -- drop
+    if (f.received.has(chunk.i)) return; // duplicate -- idempotent no-op
 
     const bytes = b64uDecode(chunk.data);
     if (!f.ready || !f.sink) {
-      // Sink not ready yet — buffer (overwriting a duplicate of the same index).
+      // Sink not ready yet -- buffer (overwriting a duplicate of the same index).
       f.buffer.set(chunk.i, bytes);
       return;
     }
@@ -346,7 +346,7 @@ export class FileReceiver {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory FileSource / FileSink — reference impls used by tests and spikes.
+// In-memory FileSource / FileSink -- reference impls used by tests and spikes.
 // Shells provide streaming, disk-backed versions of these.
 // ---------------------------------------------------------------------------
 
@@ -388,6 +388,6 @@ export class InMemoryFileSink implements FileSink {
     this.parts.clear();
     this.total = 0;
   }
-  /** The reassembled bytes (set after finalize) — for test assertions. */
+  /** The reassembled bytes (set after finalize) -- for test assertions. */
   assembled: Uint8Array | null = null;
 }

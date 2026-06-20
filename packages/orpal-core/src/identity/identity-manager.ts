@@ -62,7 +62,7 @@ export class IdentityManager {
   /**
    * Replace the stored identity with a brand-new one. Destroys the old identity
    * (and therefore the ability to decrypt anything sealed to the old transport
-   * key) — callers should confirm with the user first.
+   * key) -- callers should confirm with the user first.
    */
   static async rotate(
     store: SecureKeyStore,
@@ -75,7 +75,7 @@ export class IdentityManager {
   }
 
   /** The shareable public identity (identity key + transport key + signed
-   *  binding) — what goes into a QR code / contact card. */
+   *  binding) -- what goes into a QR code / contact card. */
   static exportPublic(identity: DeviceIdentity): PublicIdentity {
     return identity.exportPublic();
   }
