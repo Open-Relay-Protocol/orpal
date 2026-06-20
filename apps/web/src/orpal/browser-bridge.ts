@@ -8,7 +8,8 @@
 //   files    → File System Access pick for SEND; in-memory reassembly + a
 //              browser download for RECEIVE (no unprompted disk streaming exists
 //              on the web, so incoming files buffer in memory — see the note)
-//   settings → localStorage
+//   settings → localStorage (TURN credentials are NOT here — ORPAL-014 seals them
+//              separately via SealedCredentialStore; localStorage holds only URLs)
 //   clipboard→ navigator.clipboard
 //   input    → unsupported (the QR code + manual-copy field already cover this)
 //

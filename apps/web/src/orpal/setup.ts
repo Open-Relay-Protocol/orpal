@@ -19,12 +19,22 @@ import {
   createIncomingFileSink,
 } from "./bridge-stores.js";
 import { createHardwareKeyProvider } from "./webauthn-keystore.js";
+import {
+  SealedCredentialStore,
+  extractTurnCredentials,
+  hasInlineTurnSecret,
+  mergeTurnCredentials,
+  stripTurnCredentials,
+} from "./turn-credentials.js";
 
 export interface OrpalApp {
   orpal: OrpalClient;
   identity: DeviceIdentity;
   createdIdentity: boolean;
+  /** Settings with sealed TURN credentials merged back in (for the UI to edit). */
   settings: AppSettings;
+  /** Sealed store for the TURN credentials (ORPAL-014); used when saving settings. */
+  turnCredStore: SealedCredentialStore;
 }
 
 export async function createOrpalApp(): Promise<OrpalApp> {
@@ -54,6 +64,21 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   );
   const { identity, created } = await IdentityManager.loadOrCreate(keyStore);
 
+  // ORPAL-014: keep TURN credentials out of plaintext localStorage. They're sealed
+  // through the same hardware path in their own slot; AppSettings holds only the
+  // TURN URLs. Migrate any pre-ORPAL-014 inline secrets into the sealed store and
+  // strip them from localStorage, then merge the sealed secrets back in for use.
+  const turnCredStore = new SealedCredentialStore(hardwareProvider, onSealFallback);
+  let turnCreds = await turnCredStore.load();
+  if (hasInlineTurnSecret(settings.iceServers)) {
+    turnCreds = { ...extractTurnCredentials(settings.iceServers), ...turnCreds };
+    await turnCredStore.save(turnCreds);
+    settings.iceServers = stripTurnCredentials(settings.iceServers);
+    await window.orpal.settings.set(settings);
+  }
+  const iceServers = mergeTurnCredentials(settings.iceServers, turnCreds);
+  const mergedSettings: AppSettings = { ...settings, iceServers };
+
   // Each board needs to call back into OrpalClient on (re)connect; OrpalClient
   // needs the boards at construction. Resolve the cycle with a forward ref.
   let app: OrpalClient | undefined;
@@ -78,7 +103,7 @@ export async function createOrpalApp(): Promise<OrpalApp> {
     // (issue #11). Persisted in IndexedDB, so retries resume after a reload.
     pendingQueue: new IpcPendingQueueStore(),
     boards,
-    iceServers: settings.iceServers,
+    iceServers,
     relayOnlyByDefault: settings.relayOnlyByDefault,
     createFileSink: (offer) => createIncomingFileSink(offer),
     migrationStore: new IpcMigrationStore(),
@@ -88,5 +113,5 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   app = orpal;
 
   await orpal.start();
-  return { orpal, identity, createdIdentity: created, settings };
+  return { orpal, identity, createdIdentity: created, settings: mergedSettings, turnCredStore };
 }

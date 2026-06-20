@@ -21,6 +21,11 @@ import {
 import type { AppSettings } from "@shared/ipc";
 import { createOrpalApp } from "../orpal/setup.js";
 import { makeFileSource } from "../orpal/bridge-stores.js";
+import {
+  extractTurnCredentials,
+  stripTurnCredentials,
+  type SealedCredentialStore,
+} from "../orpal/turn-credentials.js";
 
 export type BrokerState = "connecting" | "open" | "closed" | "error";
 
@@ -92,6 +97,7 @@ export function useOrpal(): OrpalContextValue {
 
 export function OrpalProvider({ children }: { children: ReactNode }) {
   const orpalRef = useRef<OrpalClient | null>(null);
+  const turnCredStoreRef = useRef<SealedCredentialStore | null>(null);
   const initedRef = useRef(false);
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -132,6 +138,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
       try {
         const app = await createOrpalApp();
         orpalRef.current = app.orpal;
+        turnCredStoreRef.current = app.turnCredStore;
         setIdentityKey(app.orpal.identityKey);
         setOwnCard(app.orpal.ownContactCard());
         setSettings(app.settings);
@@ -257,8 +264,14 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   );
 
   const saveSettings = useCallback(async (s: AppSettings) => {
-    await window.orpal.settings.set(s);
-    setSettings(s);
+    // ORPAL-014: seal TURN credentials separately; localStorage gets only URLs.
+    const store = turnCredStoreRef.current;
+    if (store) await store.save(extractTurnCredentials(s.iceServers));
+    const persisted: AppSettings = store
+      ? { ...s, iceServers: stripTurnCredentials(s.iceServers) }
+      : s;
+    await window.orpal.settings.set(persisted);
+    setSettings(s); // keep credentials merged in memory for continued editing
     setSettingsNeedRestart(true); // board/ICE changes apply on next launch
   }, []);
 
