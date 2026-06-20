@@ -27,6 +27,9 @@ export interface Presence {
   webrtc_capabilities: { data_channel: boolean; ice_restart: boolean };
   session_nonce: string;
   timestamp_utc: string;
+  /** ORP-009: OPTIONAL opt-in platform push token. Present only when the device
+   * chose to enable wake notifications; covered by `signature` when present. */
+  push_token?: string;
   signature: string;
 }
 
@@ -70,6 +73,9 @@ export function makePresence(
     boards_scope: string[];
     webrtc_capabilities?: { data_channel: boolean; ice_restart: boolean };
     session_nonce?: string;
+    /** ORP-009: OPTIONAL platform push token. Spread into the signed body ONLY
+     * when set, so an opted-out presence is byte-for-byte identical to pre-ORP-009. */
+    push_token?: string;
     now?: () => string;
   },
 ): Presence {
@@ -80,6 +86,7 @@ export function makePresence(
     webrtc_capabilities: opts.webrtc_capabilities ?? { data_channel: true, ice_restart: true },
     session_nonce: opts.session_nonce ?? newNonce(),
     timestamp_utc: nowIso(opts.now),
+    ...(opts.push_token !== undefined ? { push_token: opts.push_token } : {}),
   };
   return signObject(body, identity) as Presence;
 }

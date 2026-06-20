@@ -55,6 +55,12 @@ export interface ClientOptions {
   webrtcFactory?: WebRTCFactory;
   network?: MockNetwork; // used by the default mock factory
   profile?: MockProfile;
+  /** ORP-009: OPTIONAL opt-in platform push token (APNs/FCM token or Web Push
+   * endpoint), supplied by the host shell. When set it rides the signed presence
+   * so the board can wake on a channel timeout (SPEC §7). Client is a pure
+   * pass-through: never inspects the token, sends/receives no pushes, doesn't
+   * handle the OS wake callback (the shell reconnects + re-announces). */
+  pushToken?: string;
   now?: () => string;
 }
 
@@ -106,6 +112,7 @@ export class Client {
   announcePresence(boards_scope?: string[]): void {
     const presence = makePresence(this.identity, {
       boards_scope: boards_scope ?? this.opts.boards_scope ?? ["default"],
+      push_token: this.opts.pushToken,
       now: this.opts.now,
     });
     this.conn.send({ kind: "presence", record: presence });

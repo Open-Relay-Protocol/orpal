@@ -52,6 +52,11 @@ export const PRESENCE_SCHEMA = {
     },
     session_nonce: { type: "string" },
     timestamp_utc: { type: "string" },
+    // ORP-009: OPTIONAL opt-in; PUBLIC routing metadata like boards_scope; in the
+    // SIGNED body (covered by `signature`, cannot be forged); refreshed every
+    // re-announce; NOT in `required` (omitted => byte-for-byte identical to
+    // pre-ORP-009, board wake fully disabled).
+    push_token: { type: "string", description: "optional platform push token for wake notifications" },
     signature: { type: "string" },
   },
 } as const;
