@@ -14,6 +14,7 @@ import {
   type IceForm,
   type IceTestResult,
 } from "../orpal/ice-config.js";
+import { BackupSection } from "./BackupSection.js";
 
 type TestState =
   | { phase: "idle" }
@@ -349,6 +350,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         contacts={contacts}
         onUnblock={unblockContact}
       />
+
+      <BackupSection />
 
       {error && <div className="error-text">{error}</div>}
       {(saved || settingsNeedRestart) && (

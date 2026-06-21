@@ -30,7 +30,7 @@ export function Sidebar(props: {
   onSettings: () => void;
   onMigration: () => void;
 }) {
-  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress, keyProtection, unreadByContact, totalUnread } =
+  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress, keyProtection, unreadByContact } =
     useOrpal();
 
   return (
