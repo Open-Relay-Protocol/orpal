@@ -40,6 +40,10 @@ export class ContactRegistry {
     this.records.delete(key);
   }
 
+  clear(): void {
+    this.records.clear();
+  }
+
   transportKey(key: string): string | undefined {
     return this.records.get(key)?.transportKey;
   }

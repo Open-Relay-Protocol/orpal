@@ -110,6 +110,18 @@ The same codebase ships two ways from one shared, framework-agnostic core:
   automatically on broker reconnect. Outbound messages aren't lost, though — they
   sit in the client-side **offline send queue** above and deliver once the contact
   returns (the board never holds them).
+- **Full encrypted device backup & restore** — export your **entire** Orpal state —
+  identity private keys, every contact, full message history, the pending queue,
+  settings (incl. TURN credentials), any in-flight key migration, and the block
+  list — into a single **password-sealed** file (`PBKDF2(600k)` + **AES-256-GCM**),
+  then import it on a new device or after a wipe (ORPAL-017). Because it's
+  password-based (not hardware-sealed), the file is **portable across platforms** —
+  a web export imports on Android/iOS and back. Import shows a summary first and
+  offers **merge** (add what's missing) or **replace** (wipe then restore); the
+  identity import is effectively a key migration to the new device. The file carries
+  the **private key in cleartext inside the encrypted envelope**, so the password is
+  its only protection — Orpal enforces a minimum length and warns clearly. Manage it
+  in **Settings**.
 
 ## Platforms
 
@@ -307,6 +319,17 @@ relay untrusted end-to-end:
 > hardware-protected — so use Orpal on a trusted origin (the official deployment or
 > one you control) in that case.
 
+> **Backup-file caveat (ORPAL-017):** a full device backup must be importable on a
+> *different* device that doesn't share the original's secure element, so it can't be
+> hardware-sealed — it's encrypted with a key derived from your **password**
+> (PBKDF2-HMAC-SHA256, 600k iterations, then AES-256-GCM). The identity **private
+> key travels in cleartext *inside* that encrypted envelope**, so the password is the
+> *only* thing protecting it: a weak or reused password on a leaked backup file means
+> a compromised identity. Treat the file as sensitive as the private key itself, use
+> a strong unique password (Orpal enforces a minimum length), and note that importing
+> a backup onto a second device puts the **same identity on two devices** — fine for
+> migration, but not how you add a new contact.
+
 **Reporting a vulnerability:** please do **not** open a public issue for security
 problems. Instead, report privately via GitHub's [Security
 Advisories](https://github.com/ben-is-jammin/orpal/security/advisories/new), or
@@ -340,6 +363,12 @@ The suites cover:
 - **`duplicate-suppression`** — a re-delivered message id is stored exactly once
   yet re-acknowledged, message ids are globally unique, and retries update the
   existing history row in place rather than appending a duplicate.
+- **`device-backup`** — the full encrypted backup (ORPAL-017): a payload seals and
+  re-opens with the right password, a wrong password / tampered ciphertext fails the
+  AES-GCM auth check, no plaintext secret leaks into the envelope, and an
+  `OrpalClient` round-trips its entire state onto a fresh device — covering
+  **merge** vs **replace**, the identity-conflict warning, and an in-flight
+  migration's pending keys surviving the trip.
 - **`per-contact-boards`** — a contact's configured board routes are honored:
   delivery uses only those boards (a contact pinned to the wrong board is
   unreachable even if it's online elsewhere), `setContactBoards` reroutes live, and
