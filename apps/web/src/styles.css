@@ -434,6 +434,32 @@ textarea.mono,
   color: #7ec8ff;
   border: 1px solid rgba(120, 200, 255, 0.38);
 }
+.badge.unread {
+  background: var(--brand);
+  color: #fff;
+  border: 1px solid var(--brand);
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 1px 5px;
+  box-shadow: 0 0 6px rgba(47, 123, 230, 0.5);
+}
+.convo-badges {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex: none;
+}
+.convo-name-unread {
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 0 6px rgba(150, 195, 255, 0.5);
+}
+.convo-unread {
+  border-left: 2px solid var(--brand);
+}
 
 .presence { font-size: 11px; }
 .presence-connected { color: var(--ok); }

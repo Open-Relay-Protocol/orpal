@@ -30,7 +30,7 @@ export function Sidebar(props: {
   onSettings: () => void;
   onMigration: () => void;
 }) {
-  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress, keyProtection } =
+  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress, keyProtection, unreadByContact, totalUnread } =
     useOrpal();
 
   return (
@@ -101,20 +101,28 @@ export function Sidebar(props: {
         )}
         {conversations.map((c) => {
           const state = connectionOf(c.key);
+          const unread = unreadByContact[c.key] ?? 0;
           return (
             <button
               key={c.key}
-              className={`convo ${selected === c.key ? "active" : ""}`}
+              className={`convo ${selected === c.key ? "active" : ""} ${unread > 0 ? "convo-unread" : ""}`}
               onClick={() => select(c.key)}
             >
               <div className="convo-row">
-                <span className="convo-name">{c.name}</span>
-                {c.isLoopback && (
-                  <span className="badge test" title="Diagnostic self-test contact (issue #41)">
-                    test
-                  </span>
-                )}
-                {c.relayOnly && <span className="badge relay" title="Relay-only (TURN)">relay</span>}
+                <span className={`convo-name ${unread > 0 ? "convo-name-unread" : ""}`}>{c.name}</span>
+                <span className="convo-badges">
+                  {unread > 0 && (
+                    <span className="badge unread" title={`${unread} unread message${unread !== 1 ? "s" : ""}`}>
+                      {unread}
+                    </span>
+                  )}
+                  {c.isLoopback && (
+                    <span className="badge test" title="Diagnostic self-test contact">
+                      test
+                    </span>
+                  )}
+                  {c.relayOnly && <span className="badge relay" title="Relay-only (TURN)">relay</span>}
+                </span>
               </div>
               <div className="convo-sub">
                 <span className={`presence presence-${state}`}>{presenceLabel(state)}</span>
