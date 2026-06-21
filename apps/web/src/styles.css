@@ -554,6 +554,115 @@ textarea.mono,
   .schwifty-banner { animation: none; }
 }
 
+/* 🌑 "that's no moon" easter egg — the Death Star looms and fires */
+.deathstar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  cursor: pointer;
+  background: radial-gradient(circle at 50% 50%, #0a0f1c 0%, #02030a 70%, #000 100%);
+  animation: schwifty-fade 0.5s ease-out;
+}
+.deathstar-stars {
+  position: absolute;
+  inset: 0;
+}
+.deathstar-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.85;
+  animation: deathstar-twinkle 3.4s ease-in-out infinite;
+}
+.deathstar-stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(56vw, 56vh);
+  height: min(56vw, 56vh);
+}
+.deathstar-art {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 40px rgba(120, 200, 255, 0.18));
+  animation: deathstar-loom 1.4s cubic-bezier(0.16, 0.84, 0.44, 1) both;
+}
+.deathstar-emitter {
+  fill: #8effa6;
+  animation: deathstar-charge 2.6s ease-in 0.6s both;
+}
+.deathstar-emitter-core {
+  fill: #d6ffe0;
+}
+.deathstar-beam {
+  position: absolute;
+  /* fire from the dish (upper-left quadrant of the sphere) downward */
+  left: 37%;
+  top: 32%;
+  width: 7px;
+  height: 0;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #eaffe9, #7dff8a 30%, rgba(125, 255, 138, 0));
+  box-shadow: 0 0 16px 5px rgba(125, 255, 138, 0.8);
+  border-radius: 4px;
+  opacity: 0;
+  animation: deathstar-fire 2.2s ease-in 3.1s forwards;
+}
+.deathstar-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  pointer-events: none;
+  font-family: "Arial Black", Arial, sans-serif;
+  letter-spacing: 1px;
+  color: #cfe0ff;
+  text-shadow: 0 0 12px rgba(79, 160, 255, 0.6);
+}
+.deathstar-line-1,
+.deathstar-line-2 {
+  font-size: clamp(20px, 4.5vw, 40px);
+  font-weight: 900;
+  opacity: 0;
+  animation: schwifty-fade 0.8s ease-out forwards;
+}
+.deathstar-line-1 { animation-delay: 0.9s; }
+.deathstar-line-2 { animation-delay: 1.9s; }
+@keyframes deathstar-twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.95; }
+}
+@keyframes deathstar-loom {
+  from { transform: scale(0.55); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes deathstar-charge {
+  0% { fill: #3a5a40; }
+  100% { fill: #d6ffe0; filter: drop-shadow(0 0 6px #8effa6); }
+}
+@keyframes deathstar-fire {
+  0% { height: 0; opacity: 0; }
+  12% { height: 60vh; opacity: 1; }
+  85% { height: 60vh; opacity: 1; }
+  100% { height: 60vh; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .deathstar-overlay { animation: none; }
+  .deathstar-star { animation: none; }
+  .deathstar-art { animation: none; }
+  .deathstar-emitter { animation: none; fill: #d6ffe0; }
+  .deathstar-beam { animation: none; opacity: 0; }
+  .deathstar-line-1,
+  .deathstar-line-2 { animation: none; opacity: 1; }
+}
+
 .error-mascot {
   width: 120px;
   height: auto;
@@ -658,6 +767,23 @@ textarea.mono,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rename-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.rename-row button {
+  flex: none;
+  font-size: 11px;
+  padding: 5px 10px;
 }
 
 .offline-banner {

@@ -71,6 +71,8 @@ interface OrpalContextValue {
     relayOnly?: boolean,
   ) => Promise<{ ok: boolean; reason?: string }>;
   removeContact: (key: string) => Promise<void>;
+  /** Rename a contact locally (display label only; never sent to peer/board). */
+  renameContact: (key: string, name: string) => Promise<void>;
   setRelayOnly: (key: string, value: boolean) => Promise<void>;
   /** Contact backup/migration (issue #41). Export serializes the shareable fields
    *  of every contact (no private keys / history, loopback excluded) to a file;
@@ -326,6 +328,15 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts, selected],
   );
 
+  const renameContact = useCallback(
+    async (key: string, name: string) => {
+      if (!name.trim()) return;
+      await orpalRef.current?.setContactDisplayName(key, name);
+      await refreshContacts();
+    },
+    [refreshContacts],
+  );
+
   const setRelayOnly = useCallback(
     async (key: string, value: boolean) => {
       await orpalRef.current?.setContactRelayOnly(key, value);
@@ -505,6 +516,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     connect,
     addContact,
     removeContact,
+    renameContact,
     setRelayOnly,
     exportContacts,
     importContacts,

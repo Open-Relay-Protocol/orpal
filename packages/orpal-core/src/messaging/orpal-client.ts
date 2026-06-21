@@ -452,6 +452,19 @@ export class OrpalClient {
     this.contacts.patch(identityKey, { relayOnly });
   }
 
+  /** Rename a contact locally. The display name is device-local labelling only --
+   *  it is not part of the key binding and is never advertised to the peer or the
+   *  board. An empty/whitespace name is ignored so a contact is never left
+   *  nameless. */
+  async setContactDisplayName(identityKey: string, displayName: string): Promise<void> {
+    const contact = await this.store.getContact(identityKey);
+    if (!contact) return;
+    const trimmed = displayName.trim();
+    if (!trimmed) return;
+    contact.displayName = trimmed;
+    await this.store.upsertContact(contact);
+  }
+
   async setAutoAcceptMigration(identityKey: string, autoAccept: boolean): Promise<void> {
     const contact = await this.store.getContact(identityKey);
     if (!contact) return;
