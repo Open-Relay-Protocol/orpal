@@ -3,8 +3,8 @@ import { shortKey } from "@orpal/core";
 import { useOrpal } from "../state/orpal-context.js";
 import { MessageBubble } from "./MessageBubble.js";
 import { CrabMascot } from "./CrabMascot.js";
-import { PortalEasterEgg, EASTER_EGG_PHRASE } from "./PortalEasterEgg.js";
-import { DeathStarEasterEgg, DEATH_STAR_PHRASE } from "./DeathStarEasterEgg.js";
+import { PortalOverlay, PORTAL_PHRASE } from "./PortalOverlay.js";
+import { OrbitalOverlay, ORBITAL_PHRASE } from "./OrbitalOverlay.js";
 
 export function Conversation() {
   const {
@@ -25,8 +25,8 @@ export function Conversation() {
     brokerState,
   } = useOrpal();
   const [draft, setDraft] = useState("");
-  const [schwifty, setSchwifty] = useState(false);
-  const [deathStar, setDeathStar] = useState(false);
+  const [showPortal, setShowPortal] = useState(false);
+  const [showOrbital, setShowOrbital] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,15 +59,16 @@ export function Conversation() {
 
   const onSend = () => {
     if (!draft.trim()) return;
-    // Easter eggs: never sent to the peer, just trigger the show.
+    // Certain phrases trigger a local decorative animation instead of sending;
+    // the text never leaves the device.
     const phrase = draft.trim().toLowerCase();
-    if (phrase === EASTER_EGG_PHRASE) {
-      setSchwifty(true);
+    if (phrase === PORTAL_PHRASE) {
+      setShowPortal(true);
       setDraft("");
       return;
     }
-    if (phrase === DEATH_STAR_PHRASE) {
-      setDeathStar(true);
+    if (phrase === ORBITAL_PHRASE) {
+      setShowOrbital(true);
       setDraft("");
       return;
     }
@@ -83,8 +84,8 @@ export function Conversation() {
 
   return (
     <main className="conversation">
-      {schwifty && <PortalEasterEgg onClose={() => setSchwifty(false)} />}
-      {deathStar && <DeathStarEasterEgg onClose={() => setDeathStar(false)} />}
+      {showPortal && <PortalOverlay onClose={() => setShowPortal(false)} />}
+      {showOrbital && <OrbitalOverlay onClose={() => setShowOrbital(false)} />}
       <header className="convo-header">
         <div className="convo-title">
           <button
