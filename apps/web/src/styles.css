@@ -417,6 +417,12 @@ textarea.mono,
   color: var(--relay);
   border: 1px solid rgba(199, 155, 255, 0.4);
 }
+/* issue #41: diagnostic loopback/self-test contact badge. */
+.badge.test {
+  background: rgba(120, 200, 255, 0.14);
+  color: #7ec8ff;
+  border: 1px solid rgba(120, 200, 255, 0.38);
+}
 
 .presence { font-size: 11px; }
 .presence-connected { color: var(--ok); }

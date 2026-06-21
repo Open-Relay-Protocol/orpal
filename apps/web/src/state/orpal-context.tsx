@@ -12,6 +12,8 @@ import {
   shortKey,
   type Contact,
   type ContactState,
+  type ImportSummary,
+  type LoopbackSelfTestResult,
   type MigrationProgress,
   type OrpalClient,
   type PendingMigration,
@@ -22,6 +24,7 @@ import type { AppSettings } from "@shared/ipc";
 import { createOrpalApp, type KeyProtection } from "../orpal/setup.js";
 import { enablePush, disablePush, pushSupported as pushIsSupported } from "../orpal/push.js";
 import { makeFileSource } from "../orpal/bridge-stores.js";
+import { kvGet, kvSet } from "../orpal/idb.js";
 import {
   extractTurnCredentials,
   stripTurnCredentials,
@@ -35,6 +38,8 @@ export interface Conversation {
   name: string;
   relayOnly: boolean;
   known: boolean;
+  /** issue #41: the diagnostic loopback/self-test contact, badged in the UI. */
+  isLoopback: boolean;
 }
 
 interface OrpalContextValue {
@@ -67,6 +72,15 @@ interface OrpalContextValue {
   ) => Promise<{ ok: boolean; reason?: string }>;
   removeContact: (key: string) => Promise<void>;
   setRelayOnly: (key: string, value: boolean) => Promise<void>;
+  /** Contact backup/migration (issue #41). Export serializes the shareable fields
+   *  of every contact (no private keys / history, loopback excluded) to a file;
+   *  import re-validates each binding and reports imported/skipped/rejected. */
+  exportContacts: () => Promise<void>;
+  importContacts: (onCollision: "skip" | "overwrite") => Promise<ImportSummary | null>;
+  /** Create (or surface) the diagnostic loopback "Test (me)" contact (issue #41). */
+  createTestContact: () => Promise<void>;
+  /** Run the loopback self-test: board reachable + on-device crypto round-trip. */
+  runSelfTest: () => Promise<LoopbackSelfTestResult>;
   /** Per-contact board routes (issue #19); empty list restores all-boards default. */
   setContactBoards: (key: string, preferredBoards: string[]) => Promise<void>;
   saveSettings: (s: AppSettings) => Promise<void>;
@@ -107,6 +121,10 @@ const EMPTY_METRICS: PendingMetrics = {
   maxAttempts: 0,
   byRecipient: {},
 };
+
+// One-time flag (issue #41): set once the loopback contact has been auto-seeded,
+// so deleting it doesn't make it reappear on the next launch.
+const LOOPBACK_SEEDED_KV = "loopbackSeeded";
 
 const OrpalContext = createContext<OrpalContextValue | null>(null);
 
@@ -169,6 +187,16 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         setIdentityKey(app.orpal.identityKey);
         setOwnCard(app.orpal.ownContactCard());
         setSettings(app.settings);
+
+        // issue #41: on a genuine first run (no contacts yet, never seeded) create
+        // the diagnostic loopback "Test (me)" contact so a new user can verify
+        // their setup. The one-time flag means we never resurrect it after the
+        // user deletes it.
+        const seeded = await kvGet<boolean>(LOOPBACK_SEEDED_KV);
+        if (!seeded && (await app.orpal.listContacts()).length === 0) {
+          await app.orpal.ensureLoopbackContact();
+          await kvSet(LOOPBACK_SEEDED_KV, true);
+        }
         await refreshContacts();
 
         app.orpal.events.on("message", ({ message }) => upsertMessage(message));
@@ -306,6 +334,40 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts],
   );
 
+  const exportContacts = useCallback(async () => {
+    const orpal = orpalRef.current;
+    if (!orpal) return;
+    const bundle = await orpal.exportContacts();
+    const stamp = new Date().toISOString().slice(0, 10);
+    await window.orpal.files.saveText(`orpal-contacts-${stamp}.json`, bundle);
+  }, []);
+
+  const importContacts = useCallback(
+    async (onCollision: "skip" | "overwrite") => {
+      const orpal = orpalRef.current;
+      if (!orpal) return null;
+      const text = await window.orpal.files.openText();
+      if (text === null) return null; // user cancelled the picker
+      const summary = await orpal.importContacts(text, { onCollision });
+      await refreshContacts();
+      return summary;
+    },
+    [refreshContacts],
+  );
+
+  const createTestContact = useCallback(async () => {
+    await orpalRef.current?.ensureLoopbackContact();
+    await refreshContacts();
+  }, [refreshContacts]);
+
+  const runSelfTest = useCallback(async () => {
+    const orpal = orpalRef.current;
+    if (!orpal) return { ok: false, boardReachable: false, cryptoRoundTrip: false, reason: "not-ready" };
+    const result = await orpal.runLoopbackSelfTest();
+    await refreshContacts(); // the self-test may have created the loopback contact
+    return result;
+  }, [refreshContacts]);
+
   const setContactBoards = useCallback(
     async (key: string, preferredBoards: string[]) => {
       await orpalRef.current?.setContactBoards(key, { preferredBoards });
@@ -396,14 +458,24 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         name: c.displayName,
         relayOnly: c.relayOnly,
         known: true,
+        isLoopback: c.isLoopback ?? false,
       });
     }
     for (const key of Object.keys(messagesByContact)) {
       if (!byKey.has(key)) {
-        byKey.set(key, { key, name: `Unknown (${shortKey(key)})`, relayOnly: false, known: false });
+        byKey.set(key, {
+          key,
+          name: `Unknown (${shortKey(key)})`,
+          relayOnly: false,
+          known: false,
+          isLoopback: false,
+        });
       }
     }
-    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+    // Loopback contact sorts to the bottom; otherwise alphabetical by name.
+    return [...byKey.values()].sort((a, b) =>
+      a.isLoopback !== b.isLoopback ? (a.isLoopback ? 1 : -1) : a.name.localeCompare(b.name),
+    );
   }, [contacts, messagesByContact]);
 
   const connectionOf = useCallback(
@@ -434,6 +506,10 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     addContact,
     removeContact,
     setRelayOnly,
+    exportContacts,
+    importContacts,
+    createTestContact,
+    runSelfTest,
     setContactBoards,
     saveSettings,
     reveal,

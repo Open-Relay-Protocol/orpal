@@ -109,6 +109,11 @@ export function Sidebar(props: {
             >
               <div className="convo-row">
                 <span className="convo-name">{c.name}</span>
+                {c.isLoopback && (
+                  <span className="badge test" title="Diagnostic self-test contact (issue #41)">
+                    test
+                  </span>
+                )}
                 {c.relayOnly && <span className="badge relay" title="Relay-only (TURN)">relay</span>}
               </div>
               <div className="convo-sub">

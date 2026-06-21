@@ -105,6 +105,13 @@ export interface OrpalBridge {
     finalizeWrite(handleId: string): Promise<{ sha256: string; path: string }>;
     abortWrite(handleId: string): Promise<void>;
     reveal(path: string): Promise<void>;
+    /** Save a small text blob to a user-chosen file (a browser download in the web
+     *  shell). Used by contact export (issue #41); gated behind an explicit user
+     *  action in the UI. */
+    saveText(name: string, text: string): Promise<void>;
+    /** Pick a single text file and return its contents, or null if cancelled.
+     *  Used by contact import (issue #41). */
+    openText(): Promise<string | null>;
   };
   settings: {
     get(): Promise<AppSettings>;
