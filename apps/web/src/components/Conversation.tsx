@@ -3,6 +3,8 @@ import { shortKey } from "@orpal/core";
 import { useOrpal } from "../state/orpal-context.js";
 import { MessageBubble } from "./MessageBubble.js";
 import { CrabMascot } from "./CrabMascot.js";
+import { PortalOverlay, PORTAL_PHRASE } from "./PortalOverlay.js";
+import { OrbitalOverlay, ORBITAL_PHRASE } from "./OrbitalOverlay.js";
 
 export function Conversation() {
   const {
@@ -15,6 +17,7 @@ export function Conversation() {
     sendFile,
     connect,
     setRelayOnly,
+    renameContact,
     setContactBoards,
     setAutoAcceptMigration,
     settings,
@@ -22,6 +25,8 @@ export function Conversation() {
     brokerState,
   } = useOrpal();
   const [draft, setDraft] = useState("");
+  const [showPortal, setShowPortal] = useState(false);
+  const [showOrbital, setShowOrbital] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +59,19 @@ export function Conversation() {
 
   const onSend = () => {
     if (!draft.trim()) return;
+    // Certain phrases trigger a local decorative animation instead of sending;
+    // the text never leaves the device.
+    const phrase = draft.trim().toLowerCase();
+    if (phrase === PORTAL_PHRASE) {
+      setShowPortal(true);
+      setDraft("");
+      return;
+    }
+    if (phrase === ORBITAL_PHRASE) {
+      setShowOrbital(true);
+      setDraft("");
+      return;
+    }
     sendText(draft);
     setDraft("");
   };
@@ -66,6 +84,8 @@ export function Conversation() {
 
   return (
     <main className="conversation">
+      {showPortal && <PortalOverlay onClose={() => setShowPortal(false)} />}
+      {showOrbital && <OrbitalOverlay onClose={() => setShowOrbital(false)} />}
       <header className="convo-header">
         <div className="convo-title">
           <button
@@ -99,10 +119,16 @@ export function Conversation() {
           )}
           {convo?.known && (
             <details className="board-routes">
-              <summary title="Per-contact settings: board routing, auto-accept key rotations">
+              <summary title="Per-contact settings: rename, board routing, auto-accept key rotations">
                 settings{preferred.length ? ` · ${preferred.length} boards` : ""}
               </summary>
               <div className="board-routes-menu">
+                <ContactNameEditor
+                  key={selected}
+                  contactKey={selected}
+                  currentName={convo?.name ?? ""}
+                  onRename={renameContact}
+                />
                 {boards.length > 1 && (
                   <>
                     <div className="board-routes-hint muted">
@@ -184,6 +210,43 @@ export function Conversation() {
         </button>
       </footer>
     </main>
+  );
+}
+
+function ContactNameEditor({
+  contactKey,
+  currentName,
+  onRename,
+}: {
+  contactKey: string;
+  currentName: string;
+  onRename: (key: string, name: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(currentName);
+  const dirty = value.trim().length > 0 && value.trim() !== currentName;
+  return (
+    <>
+      <div className="board-routes-hint muted">Name</div>
+      <form
+        className="rename-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (dirty) void onRename(contactKey, value);
+        }}
+      >
+        <input
+          className="rename-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Contact name"
+          placeholder="Contact name"
+          maxLength={64}
+        />
+        <button type="submit" className="ghost" disabled={!dirty}>
+          Save
+        </button>
+      </form>
+    </>
   );
 }
 

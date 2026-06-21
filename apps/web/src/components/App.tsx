@@ -7,10 +7,11 @@ import { AddContactModal } from "./AddContactModal.js";
 import { SettingsModal } from "./SettingsModal.js";
 import { MigrationWizardModal } from "./MigrationWizardModal.js";
 import { MigrationPromptModal } from "./MigrationPromptModal.js";
+import { ContactRequestModal } from "./ContactRequestModal.js";
 import { CrabMascot } from "./CrabMascot.js";
 
 function Shell() {
-  const { status, errorMsg, selected, pendingIncomingMigrations } = useOrpal();
+  const { status, errorMsg, selected, pendingIncomingMigrations, contactRequests } = useOrpal();
   const [modal, setModal] = useState<null | "identity" | "add" | "settings" | "migration">(null);
   const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(new Set());
 
@@ -56,6 +57,9 @@ function Shell() {
             setDismissedPrompts((prev) => new Set([...prev, activePrompt.contactKey]))
           }
         />
+      )}
+      {!modal && !activePrompt && contactRequests.length > 0 && (
+        <ContactRequestModal request={contactRequests[0]} />
       )}
     </div>
   );

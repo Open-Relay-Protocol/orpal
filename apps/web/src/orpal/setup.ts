@@ -142,6 +142,9 @@ export async function createOrpalApp(): Promise<OrpalApp> {
   });
   app = orpal;
 
+  // Enforce the block list from the very first inbound connection (before start).
+  orpal.setBlockedKeys(mergedSettings.blockedKeys ?? []);
+
   await orpal.start();
   return {
     orpal,

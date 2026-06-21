@@ -127,6 +127,15 @@ export class ConnectionManager {
     }
   }
 
+  /** Tear down and forget a single contact's live connection (used to enforce a
+   *  block: a now-blocked peer's channel is closed immediately). */
+  dropConnection(contactKey: string): void {
+    const conn = this.connections.get(contactKey);
+    if (!conn) return;
+    try { conn.endpoint?.close(); } catch { /* ignore */ }
+    this.connections.delete(contactKey);
+  }
+
   closeAll(): void {
     for (const conn of this.connections.values()) {
       try { conn.endpoint?.close(); } catch { /* ignore */ }

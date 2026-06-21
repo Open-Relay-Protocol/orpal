@@ -34,6 +34,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     importContacts,
     createTestContact,
     runSelfTest,
+    blockedKeys,
+    unblockContact,
   } = useOrpal();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
@@ -155,6 +157,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       relayOnlyByDefault: relayDefault,
       // Push is toggled live above; preserve whatever it's currently set to.
       pushNotifications: settings.pushNotifications,
+      // Block list is managed live (request prompt / Unblock); preserve it here.
+      blockedKeys: settings.blockedKeys,
     });
     setSaved(true);
   };
@@ -340,6 +344,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         onSelfTest={runSelfTest}
       />
 
+      <BlockedSection
+        blockedKeys={blockedKeys}
+        contacts={contacts}
+        onUnblock={unblockContact}
+      />
+
       {error && <div className="error-text">{error}</div>}
       {(saved || settingsNeedRestart) && (
         <div className="info-text">Saved. Restart Orpal to apply board / ICE changes.</div>
@@ -489,6 +499,63 @@ function ContactsSection(props: {
       )}
 
       {error && <div className="error-text">{error}</div>}
+    </>
+  );
+}
+
+function BlockedSection({
+  blockedKeys,
+  contacts,
+  onUnblock,
+}: {
+  blockedKeys: string[];
+  contacts: { identityKey: string; displayName: string }[];
+  onUnblock: (key: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const shortKey = (k: string) => (k.length <= 12 ? k : `${k.slice(0, 6)}…${k.slice(-4)}`);
+  const nameFor = (k: string) => contacts.find((c) => c.identityKey === k)?.displayName;
+
+  const unblock = async (key: string) => {
+    setBusy(key);
+    try {
+      await onUnblock(key);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <>
+      <label className="field-label">Blocked senders</label>
+      {blockedKeys.length === 0 ? (
+        <p className="muted">
+          Nobody is blocked. When an unknown sender messages you, you can block them from the
+          request prompt; blocked senders are refused at the protocol level and hidden.
+        </p>
+      ) : (
+        <>
+          <p className="muted">
+            These identities are refused at the protocol level — no messages, files, or requests get
+            through, and their conversations are hidden. Unblock to allow them again.
+          </p>
+          {blockedKeys.map((key) => (
+            <div className="board-row" key={key}>
+              <code className="key-block" style={{ flex: 1, margin: 0 }}>
+                {nameFor(key) ? `${nameFor(key)} · ` : ""}
+                {shortKey(key)}
+              </code>
+              <button
+                className="ghost"
+                onClick={() => void unblock(key)}
+                disabled={busy === key}
+              >
+                {busy === key ? "Unblocking…" : "Unblock"}
+              </button>
+            </div>
+          ))}
+        </>
+      )}
     </>
   );
 }

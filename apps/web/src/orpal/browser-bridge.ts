@@ -162,6 +162,7 @@ async function loadSettings(): Promise<AppSettings> {
       iceServers: parsed.iceServers ?? DEFAULT_SETTINGS.iceServers,
       relayOnlyByDefault: parsed.relayOnlyByDefault ?? DEFAULT_SETTINGS.relayOnlyByDefault,
       pushNotifications: parsed.pushNotifications ?? DEFAULT_SETTINGS.pushNotifications,
+      blockedKeys: parsed.blockedKeys ?? DEFAULT_SETTINGS.blockedKeys,
     };
   } catch {
     return DEFAULT_SETTINGS;

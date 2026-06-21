@@ -11,6 +11,7 @@ import {
 import {
   shortKey,
   type Contact,
+  type ContactRequest,
   type ContactState,
   type ImportSummary,
   type LoopbackSelfTestResult,
@@ -71,7 +72,25 @@ interface OrpalContextValue {
     relayOnly?: boolean,
   ) => Promise<{ ok: boolean; reason?: string }>;
   removeContact: (key: string) => Promise<void>;
+  /** Rename a contact locally (display label only; never sent to peer/board). */
+  renameContact: (key: string, name: string) => Promise<void>;
   setRelayOnly: (key: string, value: boolean) => Promise<void>;
+
+  /** Pending message requests from unknown senders (not yet contacts) who handed
+   *  us their card in-band. The UI prompts the user to accept or block each. */
+  contactRequests: ContactRequest[];
+  /** Accept an unknown sender: add them as a full two-way contact, optionally
+   *  naming them. */
+  acceptContactRequest: (key: string, name?: string) => Promise<{ ok: boolean; reason?: string }>;
+  /** Dismiss a request without accepting/blocking (reappears if they reconnect). */
+  dismissContactRequest: (key: string) => void;
+  /** Identity keys the user has blocked (from settings). */
+  blockedKeys: string[];
+  /** Block an identity key: refuse their connection, drop the conversation, and
+   *  persist them to the block list. */
+  blockContact: (key: string) => Promise<void>;
+  /** Remove an identity key from the block list. */
+  unblockContact: (key: string) => Promise<void>;
   /** Contact backup/migration (issue #41). Export serializes the shareable fields
    *  of every contact (no private keys / history, loopback excluded) to a file;
    *  import re-validates each binding and reports imported/skipped/rejected. */
@@ -111,6 +130,7 @@ const EMPTY_SETTINGS: AppSettings = {
   iceServers: [],
   relayOnlyByDefault: false,
   pushNotifications: false,
+  blockedKeys: [],
 };
 
 const EMPTY_METRICS: PendingMetrics = {
@@ -155,6 +175,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [pushEnabled, setPushEnabledState] = useState(false);
   const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
   const [pendingIncomingMigrations, setPendingIncomingMigrations] = useState<readonly PendingMigration[]>([]);
+  const [contactRequests, setContactRequests] = useState<ContactRequest[]>([]);
 
   const upsertMessage = useCallback((m: StoredMessage) => {
     setMessagesByContact((prev) => {
@@ -211,6 +232,14 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         // (the queue may already hold messages resumed from a previous session).
         app.orpal.events.on("pending", ({ metrics }) => setPendingMetrics(metrics));
         setPendingMetrics(await app.orpal.pendingMetrics());
+        // Unknown senders who messaged us and handed us their card in-band:
+        // surface them as message requests for the user to accept or block.
+        app.orpal.events.on("contact-request", (req) =>
+          setContactRequests((prev) =>
+            prev.some((r) => r.contactKey === req.contactKey) ? prev : [...prev, req],
+          ),
+        );
+        setContactRequests([...app.orpal.contactRequests]);
         app.orpal.events.on("error", ({ error, context }) =>
           // eslint-disable-next-line no-console
           console.warn("[orpal]", context, error),
@@ -326,12 +355,84 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts, selected],
   );
 
+  const renameContact = useCallback(
+    async (key: string, name: string) => {
+      if (!name.trim()) return;
+      await orpalRef.current?.setContactDisplayName(key, name);
+      await refreshContacts();
+    },
+    [refreshContacts],
+  );
+
   const setRelayOnly = useCallback(
     async (key: string, value: boolean) => {
       await orpalRef.current?.setContactRelayOnly(key, value);
       await refreshContacts();
     },
     [refreshContacts],
+  );
+
+  // Persist a settings change immediately, without flagging a restart (block-list
+  // changes apply live). Mirrors the seal-TURN-credentials handling in saveSettings.
+  const persistSettings = useCallback(async (next: AppSettings) => {
+    setSettings(next);
+    const persisted = turnCredStoreRef.current
+      ? { ...next, iceServers: stripTurnCredentials(next.iceServers) }
+      : next;
+    await window.orpal.settings.set(persisted);
+  }, []);
+
+  const acceptContactRequest = useCallback(
+    async (key: string, name?: string) => {
+      const orpal = orpalRef.current;
+      if (!orpal) return { ok: false, reason: "not-ready" };
+      const res = await orpal.acceptContactRequest(key, name);
+      if (res.ok) {
+        await refreshContacts();
+        setContactRequests((prev) => prev.filter((r) => r.contactKey !== key));
+      }
+      return res.ok ? { ok: true } : { ok: false, reason: res.reason };
+    },
+    [refreshContacts],
+  );
+
+  const dismissContactRequest = useCallback((key: string) => {
+    orpalRef.current?.dismissContactRequest(key);
+    setContactRequests((prev) => prev.filter((r) => r.contactKey !== key));
+  }, []);
+
+  const blockContact = useCallback(
+    async (key: string) => {
+      const orpal = orpalRef.current;
+      if (!orpal) return;
+      const current = settings ?? EMPTY_SETTINGS;
+      const blockedKeys = [...new Set([...current.blockedKeys, key])];
+      orpal.setBlockedKeys(blockedKeys); // refuse + drop live connection now
+      orpal.dismissContactRequest(key);
+      await persistSettings({ ...current, blockedKeys });
+      // Drop any open conversation and pending request for the blocked key.
+      setContactRequests((prev) => prev.filter((r) => r.contactKey !== key));
+      setMessagesByContact((prev) => {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setSelected((sel) => (sel === key ? null : sel));
+    },
+    [settings, persistSettings],
+  );
+
+  const unblockContact = useCallback(
+    async (key: string) => {
+      const orpal = orpalRef.current;
+      if (!orpal) return;
+      const current = settings ?? EMPTY_SETTINGS;
+      const blockedKeys = current.blockedKeys.filter((k) => k !== key);
+      orpal.setBlockedKeys(blockedKeys);
+      await persistSettings({ ...current, blockedKeys });
+    },
+    [settings, persistSettings],
   );
 
   const exportContacts = useCallback(async () => {
@@ -450,9 +551,13 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts],
   );
 
+  const blockedKeys = settings?.blockedKeys ?? [];
+
   const conversations = useMemo<Conversation[]>(() => {
+    const blocked = new Set(settings?.blockedKeys ?? []);
     const byKey = new Map<string, Conversation>();
     for (const c of contacts) {
+      if (blocked.has(c.identityKey)) continue;
       byKey.set(c.identityKey, {
         key: c.identityKey,
         name: c.displayName,
@@ -462,6 +567,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
       });
     }
     for (const key of Object.keys(messagesByContact)) {
+      if (blocked.has(key)) continue;
       if (!byKey.has(key)) {
         byKey.set(key, {
           key,
@@ -476,7 +582,7 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     return [...byKey.values()].sort((a, b) =>
       a.isLoopback !== b.isLoopback ? (a.isLoopback ? 1 : -1) : a.name.localeCompare(b.name),
     );
-  }, [contacts, messagesByContact]);
+  }, [contacts, messagesByContact, settings?.blockedKeys]);
 
   const connectionOf = useCallback(
     (key: string): ContactState => connByContact[key] ?? "unknown",
@@ -505,7 +611,14 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     connect,
     addContact,
     removeContact,
+    renameContact,
     setRelayOnly,
+    contactRequests,
+    acceptContactRequest,
+    dismissContactRequest,
+    blockedKeys,
+    blockContact,
+    unblockContact,
     exportContacts,
     importContacts,
     createTestContact,
