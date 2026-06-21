@@ -422,6 +422,19 @@ textarea.mono,
   border-top: 1px solid var(--metal-lo);
   background: linear-gradient(var(--panel), var(--panel-2));
 }
+.info-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.info-link:hover .info-logo {
+  opacity: 1;
+}
+.info-link:hover .info-caption {
+  color: var(--brand);
+}
 .info-logo {
   height: 20px;
   width: auto;
