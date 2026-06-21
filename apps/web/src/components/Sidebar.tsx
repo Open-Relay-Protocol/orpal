@@ -1,6 +1,7 @@
 import { useOrpal } from "../state/orpal-context.js";
 import { shortKey } from "@orpal/core";
 import orpLogo from "@/assets/orp-logo.svg";
+import { SignalMeter } from "./SignalMeter.js";
 
 const BROKER_LABEL: Record<string, string> = {
   connecting: "Connecting to board…",
@@ -30,7 +31,7 @@ export function Sidebar(props: {
   onSettings: () => void;
   onMigration: () => void;
 }) {
-  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress, keyProtection, unreadByContact } =
+  const { conversations, selected, select, connectionOf, brokerState, identityKey, pendingMetrics, migrationProgress, keyProtection, unreadByContact, skin, signalActivity } =
     useOrpal();
 
   return (
@@ -38,15 +39,7 @@ export function Sidebar(props: {
       <header className="sidebar-head">
         <div className="brand-row">
           <div className="brand">Orpal</div>
-          <div className="eq" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-          </div>
+          <SignalMeter state={brokerState} activity={signalActivity} skin={skin} />
         </div>
         <div className="tagline">it really cracks the crab’s back 🦀</div>
         <div

@@ -27,6 +27,7 @@ import { createOrpalApp, type KeyProtection } from "../orpal/setup.js";
 import { enablePush, disablePush, pushSupported as pushIsSupported } from "../orpal/push.js";
 import { makeFileSource } from "../orpal/bridge-stores.js";
 import { kvGet, kvSet } from "../orpal/idb.js";
+import { applySkin, loadSkin, persistSkin, type SkinId } from "../orpal/skins.js";
 import {
   extractTurnCredentials,
   stripTurnCredentials,
@@ -128,6 +129,13 @@ interface OrpalContextValue {
 
   unreadByContact: Record<string, number>;
   totalUnread: number;
+
+  /** ORPAL-019: the active UI skin and a setter that applies + persists it. */
+  skin: SkinId;
+  setSkin: (id: SkinId) => void;
+  /** ORPAL-019: a counter bumped on each message sent/received so the sidebar
+   *  signal meter can tick up briefly on activity. */
+  signalActivity: number;
 }
 
 // Placeholder settings before the real ones load (empty, not the real defaults,
@@ -184,6 +192,8 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [pendingIncomingMigrations, setPendingIncomingMigrations] = useState<readonly PendingMigration[]>([]);
   const [contactRequests, setContactRequests] = useState<ContactRequest[]>([]);
   const [unreadByContact, setUnreadByContact] = useState<Record<string, number>>({});
+  const [skin, setSkinState] = useState<SkinId>(() => loadSkin());
+  const [signalActivity, setSignalActivity] = useState(0);
   const lastReadRef = useRef<Record<string, number>>(
     (() => { try { return JSON.parse(localStorage.getItem("orpal:lastRead") ?? "{}"); } catch { return {}; } })(),
   );
@@ -238,7 +248,10 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
         }
         await refreshContacts();
 
-        app.orpal.events.on("message", ({ message }) => upsertMessage(message));
+        app.orpal.events.on("message", ({ message }) => {
+          upsertMessage(message);
+          setSignalActivity((n) => n + 1); // ORPAL-019: pulse the signal meter
+        });
         app.orpal.events.on("message-updated", ({ message }) => upsertMessage(message));
         app.orpal.events.on("connection", ({ contactKey, state }) =>
           setConnByContact((prev) => ({ ...prev, [contactKey]: state })),
@@ -347,7 +360,13 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     const pick = await window.orpal.files.pickForSend();
     if (!pick) return;
     const source = await makeFileSource(pick);
-    void orpal.sendFile(selected, source);
+    const fileId = await orpal.sendFile(selected, source);
+    // ORPAL-019: keep a copy of an outgoing image's bytes so it previews inline,
+    // exactly like a received one. (sendFile resolves once the transfer is under
+    // way; the picked File is still cached at this point.)
+    if (pick.mime.startsWith("image/")) {
+      await window.orpal.files.retainOutgoingImage(fileId, pick.path, pick.mime);
+    }
   }, [selected]);
 
   const retry = useCallback(
@@ -549,6 +568,12 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     void window.orpal.files.reveal(path);
   }, []);
 
+  const setSkin = useCallback((id: SkinId) => {
+    setSkinState(id);
+    applySkin(id); // reflect onto <html data-skin> so the CSS tokens swap
+    persistSkin(id); // survive restarts
+  }, []);
+
   const startMigration = useCallback(async (retireAfterUtc: string) => {
     await orpalRef.current?.startMigration(retireAfterUtc);
     setMigrationProgress(orpalRef.current?.migrationProgress ?? null);
@@ -713,6 +738,9 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     restoreBackupPayload,
     unreadByContact,
     totalUnread: Object.values(unreadByContact).reduce((sum, n) => sum + n, 0),
+    skin,
+    setSkin,
+    signalActivity,
   };
 
   return <OrpalContext.Provider value={value}>{children}</OrpalContext.Provider>;

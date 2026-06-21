@@ -142,7 +142,12 @@ export async function makeFileSource(pick: FilePick): Promise<FileSource> {
 
 /** Create the sink an incoming file streams into (receiver side). */
 export async function createIncomingFileSink(offer: FileOfferFrame): Promise<IncomingFileSink> {
-  const handle = await window.orpal.files.openWrite(offer.name);
+  // Pass the offer's fileId + mime so the shell can recognise a verified image and
+  // keep its bytes in memory for an inline preview (ORPAL-019).
+  const handle = await window.orpal.files.openWrite(offer.name, {
+    fileId: offer.fileId,
+    mime: offer.mime,
+  });
   const sink: FileSink = {
     writeChunk: (offset, data) => window.orpal.files.writeChunk(handle.handleId, offset, data),
     finalize: () => window.orpal.files.finalizeWrite(handle.handleId),

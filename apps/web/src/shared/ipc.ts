@@ -60,6 +60,14 @@ export interface WriteHandle {
   path: string;
 }
 
+/** ORPAL-019: optional metadata handed to `openWrite` so the shell can recognise
+ *  a verified image and keep its bytes in memory for an inline preview (keyed by
+ *  the transfer's fileId) instead of writing them to disk. */
+export interface WriteMeta {
+  fileId?: string;
+  mime?: string;
+}
+
 export type MessagePatch = Partial<Pick<StoredMessage, "state" | "text" | "file">>;
 
 /** The full surface exposed to the UI as `window.orpal`. */
@@ -104,11 +112,20 @@ export interface OrpalBridge {
     readChunk(handleId: string, offset: number, length: number): Promise<Uint8Array>;
     hash(handleId: string): Promise<string>;
     closeRead(handleId: string): Promise<void>;
-    openWrite(name: string): Promise<WriteHandle>;
+    openWrite(name: string, meta?: WriteMeta): Promise<WriteHandle>;
     writeChunk(handleId: string, offset: number, data: Uint8Array): Promise<void>;
     finalizeWrite(handleId: string): Promise<{ sha256: string; path: string }>;
     abortWrite(handleId: string): Promise<void>;
     reveal(path: string): Promise<void>;
+    /** ORPAL-019: an object URL for a received/sent image's reassembled, SHA-256
+     *  -verified bytes, kept in memory (never written to disk) so the UI can show
+     *  an inline preview. Returns null when no image is retained for that id (e.g.
+     *  after a reload, or a non-image) so the UI falls back to the attachment row.
+     *  The bridge owns the URL's lifecycle (one cached URL per id). */
+    imageObjectUrl(fileId: string): Promise<string | null>;
+    /** ORPAL-019: retain an OUTGOING picked image (by its send "path") under the
+     *  transfer's fileId so sent images preview inline too. No-op for non-images. */
+    retainOutgoingImage(fileId: string, path: string, mime: string): Promise<void>;
     /** Save a small text blob to a user-chosen file (a browser download in the web
      *  shell). Used by contact export (issue #41); gated behind an explicit user
      *  action in the UI. */
