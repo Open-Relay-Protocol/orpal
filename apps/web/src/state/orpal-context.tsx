@@ -11,6 +11,8 @@ import {
 import {
   shortKey,
   type BackupPayload,
+  type BackupRestoreResult,
+  type BackupSummary,
   type Contact,
   type ContactRequest,
   type ContactState,
@@ -97,6 +99,26 @@ interface OrpalContextValue {
    *  import re-validates each binding and reports imported/skipped/rejected. */
   exportContacts: () => Promise<void>;
   importContacts: (onCollision: "skip" | "overwrite") => Promise<ImportSummary | null>;
+  /** Full encrypted device backup (ORPAL-017). Export seals the ENTIRE app state
+   *  (identity private keys, history, pending queue, settings, migration, block
+   *  list) into one password-protected file. The file is as sensitive as the
+   *  private key itself -- the password is its only protection. */
+  exportBackup: (password: string) => Promise<void>;
+  /** Pick + decrypt a backup file and return its summary for confirmation, without
+   *  committing anything. The decrypted payload is held until `restoreBackup` (or a
+   *  cancel). Returns `cancelled` if the file picker was dismissed. */
+  previewBackup: (
+    password: string,
+  ) => Promise<
+    | { ok: true; summary: BackupSummary; identityConflict: boolean }
+    | { ok: false; reason: string }
+  >;
+  /** Commit the previewed backup. `merge` adds only missing items; `replace` wipes
+   *  local state first. Restores the identity (a key migration to this device --
+   *  requires a restart) and persists the restored settings + block list. */
+  restoreBackup: (mode: "merge" | "replace") => Promise<BackupRestoreResult>;
+  /** Discard a previewed-but-not-committed backup payload (clears the secret). */
+  cancelBackupPreview: () => void;
   /** Create (or surface) the diagnostic loopback "Test (me)" contact (issue #41). */
   createTestContact: () => Promise<void>;
   /** Run the loopback self-test: board reachable + on-device crypto round-trip. */
@@ -122,9 +144,6 @@ interface OrpalContextValue {
   acceptMigration: (contactKey: string) => Promise<boolean>;
   declineMigration: (contactKey: string) => void;
   setAutoAcceptMigration: (key: string, value: boolean) => Promise<void>;
-
-  gatherBackupPayload: () => Promise<BackupPayload>;
-  restoreBackupPayload: (payload: BackupPayload) => Promise<void>;
 
   unreadByContact: Record<string, number>;
   totalUnread: number;
@@ -165,6 +184,10 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const orpalRef = useRef<OrpalClient | null>(null);
   const turnCredStoreRef = useRef<SealedCredentialStore | null>(null);
   const initedRef = useRef(false);
+  // A decrypted backup payload held between previewBackup() and restoreBackup().
+  // Kept in a ref (never React state) so this secret-bearing object isn't retained
+  // in the render tree, and is cleared the moment the restore commits or is cancelled.
+  const backupPayloadRef = useRef<BackupPayload | null>(null);
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -484,6 +507,77 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts],
   );
 
+  // ---- full encrypted device backup / restore (ORPAL-017) -------------------
+
+  const exportBackup = useCallback(
+    async (password: string) => {
+      const orpal = orpalRef.current;
+      if (!orpal) return;
+      // The in-memory `settings` carry TURN credentials merged back in (ORPAL-014),
+      // so the backup captures the FULL settings -- the file is sealed, so it's the
+      // right place for those secrets.
+      const json = await orpal.exportBackup(password, settings ?? EMPTY_SETTINGS);
+      const stamp = new Date().toISOString().slice(0, 10);
+      await window.orpal.files.saveText(`orpal-backup-${stamp}.json`, json);
+    },
+    [settings],
+  );
+
+  const previewBackup = useCallback(async (password: string) => {
+    const orpal = orpalRef.current;
+    if (!orpal) return { ok: false, reason: "not-ready" } as const;
+    const text = await window.orpal.files.openText();
+    if (text === null) return { ok: false, reason: "cancelled" } as const;
+    const opened = await orpal.readBackup(text, password);
+    if (!opened.ok) return { ok: false, reason: opened.reason } as const;
+    backupPayloadRef.current = opened.result.payload;
+    return {
+      ok: true as const,
+      summary: opened.result.summary,
+      identityConflict: opened.result.identityConflict,
+    };
+  }, []);
+
+  const cancelBackupPreview = useCallback(() => {
+    backupPayloadRef.current = null;
+  }, []);
+
+  const restoreBackup = useCallback(
+    async (mode: "merge" | "replace") => {
+      const orpal = orpalRef.current;
+      const payload = backupPayloadRef.current;
+      if (!orpal || !payload) throw new Error("No backup is staged for restore.");
+      const result = await orpal.restoreBackup(payload, { mode });
+      backupPayloadRef.current = null; // drop the secret as soon as it's applied
+
+      // Persist the restored, shell-owned settings through the same sealed-TURN
+      // path saveSettings uses (secrets to the sealed store, only URLs to storage),
+      // and reflect the restored block list.
+      const restored = {
+        ...EMPTY_SETTINGS,
+        ...(result.settings as AppSettings),
+        blockedKeys: result.blockedKeys,
+      };
+      const store = turnCredStoreRef.current;
+      if (store) await store.save(extractTurnCredentials(restored.iceServers));
+      const persisted = store
+        ? { ...restored, iceServers: stripTurnCredentials(restored.iceServers) }
+        : restored;
+      await window.orpal.settings.set(persisted);
+      setSettings(restored);
+      setSettingsNeedRestart(true);
+
+      // Refresh the views that changed; drop cached histories so they reload on
+      // select (a replace may have wiped them).
+      await refreshContacts();
+      setMessagesByContact({});
+      setSelected(null);
+      setPendingMetrics(await orpal.pendingMetrics());
+      return result;
+    },
+    [refreshContacts],
+  );
+
   const createTestContact = useCallback(async () => {
     await orpalRef.current?.ensureLoopbackContact();
     await refreshContacts();
@@ -579,51 +673,6 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts],
   );
 
-  const gatherBackupPayload = useCallback(async (): Promise<BackupPayload> => {
-    const orpal = orpalRef.current;
-    if (!orpal) throw new Error("not ready");
-    const contactList = await orpal.listContacts();
-    const messages: Record<string, StoredMessage[]> = {};
-    for (const c of contactList) {
-      messages[c.identityKey] = await orpal.history(c.identityKey, { limit: 100_000 });
-    }
-    const keys = await window.orpal.keys.load();
-    if (!keys) throw new Error("No identity keys found");
-    const pending = await window.orpal.pending.list();
-    const currentSettings = await window.orpal.settings.get();
-    const migrationState = await kvGet("migrationState");
-    return {
-      identity: keys as any,
-      contacts: contactList,
-      messages,
-      pending,
-      settings: { ...currentSettings, blockedKeys: currentSettings.blockedKeys ?? [] },
-      migrationState: migrationState as any ?? null,
-    };
-  }, []);
-
-  const restoreBackupPayload = useCallback(async (payload: BackupPayload): Promise<void> => {
-    await window.orpal.keys.save(payload.identity as any);
-    const store = window.orpal.store;
-    for (const contact of payload.contacts) {
-      await store.upsertContact(contact);
-    }
-    for (const [, msgs] of Object.entries(payload.messages)) {
-      for (const msg of msgs) {
-        await store.appendMessage(msg);
-      }
-    }
-    for (const msg of payload.pending ?? []) {
-      await window.orpal.pending.enqueue(msg);
-    }
-    if (payload.settings) {
-      await window.orpal.settings.set(payload.settings as any);
-    }
-    if (payload.migrationState) {
-      await kvSet("migrationState", payload.migrationState);
-    }
-  }, []);
-
   const blockedKeys = settings?.blockedKeys ?? [];
 
   const conversations = useMemo<Conversation[]>(() => {
@@ -694,6 +743,10 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     unblockContact,
     exportContacts,
     importContacts,
+    exportBackup,
+    previewBackup,
+    restoreBackup,
+    cancelBackupPreview,
     createTestContact,
     runSelfTest,
     setContactBoards,
@@ -709,8 +762,6 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     acceptMigration,
     declineMigration,
     setAutoAcceptMigration,
-    gatherBackupPayload,
-    restoreBackupPayload,
     unreadByContact,
     totalUnread: Object.values(unreadByContact).reduce((sum, n) => sum + n, 0),
   };

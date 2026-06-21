@@ -22,6 +22,9 @@ export * from "./contacts/contact.js";
 // Contacts -- bulk export / import + loopback diagnostic contact (issue #41).
 export * from "./contacts/contact-export.js";
 
+// Full encrypted device backup + restore (ORPAL-017).
+export * from "./backup/device-backup.js";
+
 // Persistence abstraction.
 export * from "./persistence/conversation-store.js";
 
@@ -33,9 +36,6 @@ export * from "./messaging/pending-queue.js";
 export * from "./messaging/delivery-worker.js";
 export * from "./messaging/migration-manager.js";
 export * from "./transfer/file-transfer.js";
-
-// Backup / restore.
-export * from "./backup/backup.js";
 
 // Utilities.
 export { TypedEmitter } from "./util/events.js";

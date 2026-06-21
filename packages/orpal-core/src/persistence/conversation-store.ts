@@ -90,6 +90,13 @@ export interface ConversationStore {
    *  `listMessages().find()` scan on every delivery-state transition (issue #34). */
   getMessage(id: string): Promise<StoredMessage | null>;
   listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;
+  /** Every stored message across ALL conversations, in no particular order. Used
+   *  by the full-device backup (ORPAL-017) to capture complete history -- including
+   *  conversations with unknown senders that aren't (yet) contacts. */
+  listAllMessages(): Promise<StoredMessage[]>;
+  /** Wipe ALL contacts and messages. Used by a "replace" restore (ORPAL-017),
+   *  which clears local state before importing the backup's. */
+  clear(): Promise<void>;
 }
 
 /** An in-memory ConversationStore for tests and quick spikes. */
@@ -134,5 +141,12 @@ export class InMemoryConversationStore implements ConversationStore {
     rows = rows.sort((a, b) => b.ts - a.ts);
     if (opts.limit !== undefined) rows = rows.slice(0, opts.limit);
     return rows.map((m) => ({ ...m }));
+  }
+  async listAllMessages(): Promise<StoredMessage[]> {
+    return [...this.messages.values()].map((m) => ({ ...m }));
+  }
+  async clear(): Promise<void> {
+    this.contacts.clear();
+    this.messages.clear();
   }
 }
