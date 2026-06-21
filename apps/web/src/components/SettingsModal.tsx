@@ -2,7 +2,13 @@ import { useState } from "react";
 import { useOrpal } from "../state/orpal-context.js";
 import { Modal } from "./Modal.js";
 import type { IceServer } from "@shared/ipc";
-import type { ImportSummary, LoopbackSelfTestResult } from "@orpal/core";
+import {
+  validateBackupPassword,
+  type BackupRestoreResult,
+  type BackupSummary,
+  type ImportSummary,
+  type LoopbackSelfTestResult,
+} from "@orpal/core";
 import {
   configHasTurn,
   formToIceServers,
@@ -32,6 +38,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     contacts,
     exportContacts,
     importContacts,
+    exportBackup,
+    previewBackup,
+    restoreBackup,
+    cancelBackupPreview,
     createTestContact,
     runSelfTest,
     blockedKeys,
@@ -344,6 +354,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         onSelfTest={runSelfTest}
       />
 
+      <BackupSection
+        onExport={exportBackup}
+        onPreview={previewBackup}
+        onRestore={restoreBackup}
+        onCancelPreview={cancelBackupPreview}
+      />
+
       <BlockedSection
         blockedKeys={blockedKeys}
         contacts={contacts}
@@ -498,6 +515,231 @@ function ContactsSection(props: {
         </div>
       )}
 
+      {error && <div className="error-text">{error}</div>}
+    </>
+  );
+}
+
+// Human-readable reasons for a failed backup decrypt/parse (ORPAL-017).
+const BACKUP_REASONS: Record<string, string> = {
+  "not-valid-json": "That file isn’t a valid Orpal backup (not JSON).",
+  "not-an-object": "That file isn’t a valid Orpal backup.",
+  "not-a-device-backup": "That file isn’t an Orpal device backup.",
+  "unsupported-version": "This backup was made by a newer version of Orpal.",
+  "missing-crypto-fields": "This backup file is missing its encryption fields.",
+  "bad-kdf-params": "This backup file has invalid encryption parameters.",
+  "password-required": "Enter the backup’s password.",
+  "bad-password-or-corrupt": "Wrong password, or the file is corrupt or tampered with.",
+  "decrypted-not-json": "Decryption succeeded but the contents are unreadable.",
+  "not-a-backup-payload": "This file decrypted but isn’t a full-device backup.",
+  "not-ready": "Orpal is still starting up — try again in a moment.",
+};
+
+const reasonText = (reason: string) => BACKUP_REASONS[reason] ?? reason;
+
+function BackupSection(props: {
+  onExport: (password: string) => Promise<void>;
+  onPreview: (
+    password: string,
+  ) => Promise<
+    | { ok: true; summary: BackupSummary; identityConflict: boolean }
+    | { ok: false; reason: string }
+  >;
+  onRestore: (mode: "merge" | "replace") => Promise<BackupRestoreResult>;
+  onCancelPreview: () => void;
+}) {
+  const [exportPw, setExportPw] = useState("");
+  const [exportPw2, setExportPw2] = useState("");
+  const [importPw, setImportPw] = useState("");
+  const [mode, setMode] = useState<"merge" | "replace">("merge");
+  const [staged, setStaged] = useState<{ summary: BackupSummary; identityConflict: boolean } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState<null | "export" | "preview" | "restore">(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [result, setResult] = useState<BackupRestoreResult | null>(null);
+
+  const pwProblem = exportPw ? validateBackupPassword(exportPw) : null;
+
+  const doExport = async () => {
+    setError(null);
+    setNotice(null);
+    const problem = validateBackupPassword(exportPw);
+    if (problem) return setError(problem);
+    if (exportPw !== exportPw2) return setError("The two passwords don’t match.");
+    if (
+      !window.confirm(
+        "This backup contains your PRIVATE KEY and all your messages. The password is the ONLY thing protecting it — anyone who gets the file AND a weak password owns your identity. Keep the file somewhere safe and never reuse this password. Continue?",
+      )
+    ) {
+      return;
+    }
+    setBusy("export");
+    try {
+      await props.onExport(exportPw);
+      setExportPw("");
+      setExportPw2("");
+      setNotice("Backup file saved. Store it somewhere safe.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doPreview = async () => {
+    setError(null);
+    setNotice(null);
+    setResult(null);
+    if (!importPw) return setError("Enter the backup’s password.");
+    setBusy("preview");
+    try {
+      const res = await props.onPreview(importPw);
+      if (!res.ok) {
+        if (res.reason !== "cancelled") setError(reasonText(res.reason));
+        return;
+      }
+      setStaged({ summary: res.summary, identityConflict: res.identityConflict });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doRestore = async () => {
+    if (!staged) return;
+    setError(null);
+    const warning =
+      (mode === "replace"
+        ? "REPLACE will WIPE this device’s contacts, messages, and pending queue, then restore from the backup. "
+        : "MERGE will add items from the backup that you don’t already have. ") +
+      "It will also REPLACE this device’s identity with the backup’s — a key migration to this device. " +
+      (staged.identityConflict
+        ? "The backup’s identity is DIFFERENT from this device’s current identity; your current identity will be lost. "
+        : "") +
+      "Continue?";
+    if (!window.confirm(warning)) return;
+    setBusy("restore");
+    try {
+      const r = await props.onRestore(mode);
+      setResult(r);
+      setStaged(null);
+      setImportPw("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const cancelStaged = () => {
+    props.onCancelPreview();
+    setStaged(null);
+    setImportPw("");
+  };
+
+  return (
+    <>
+      <label className="field-label">Full device backup &amp; restore</label>
+      <p className="muted">
+        Export your <strong>entire</strong> Orpal — identity keys, contacts, message history, pending
+        messages, and settings — into one encrypted file you can move to a new device or keep for
+        recovery. Unlike a contacts export, this <strong>contains your private key and your
+        messages</strong>. The file is encrypted with the password you choose, so it’s safe to send
+        over email or cloud storage — <strong>but the password is the only protection</strong>. Use
+        a strong, unique one; a weak password means a stolen file = a stolen identity.
+      </p>
+
+      <label className="ice-sub-label">Export password (min 12 characters)</label>
+      <input
+        type="password"
+        value={exportPw}
+        onChange={(e) => setExportPw(e.target.value)}
+        placeholder="Choose a strong, unique password"
+        aria-label="Backup export password"
+      />
+      <input
+        type="password"
+        value={exportPw2}
+        onChange={(e) => setExportPw2(e.target.value)}
+        placeholder="Confirm password"
+        aria-label="Confirm backup export password"
+      />
+      {pwProblem && <p className="muted">{pwProblem}</p>}
+      <div className="board-row">
+        <button className="ghost" onClick={() => void doExport()} disabled={busy !== null}>
+          {busy === "export" ? "Exporting…" : "Export encrypted backup"}
+        </button>
+      </div>
+
+      <label className="ice-sub-label">Restore from a backup file</label>
+      <input
+        type="password"
+        value={importPw}
+        onChange={(e) => setImportPw(e.target.value)}
+        placeholder="Backup password"
+        aria-label="Backup import password"
+      />
+      {!staged ? (
+        <div className="board-row">
+          <button className="ghost" onClick={() => void doPreview()} disabled={busy !== null}>
+            {busy === "preview" ? "Reading…" : "Choose backup file…"}
+          </button>
+        </div>
+      ) : (
+        <div className="info-text" role="status">
+          <div>
+            This backup holds <strong>{staged.summary.contacts}</strong> contact(s),{" "}
+            <strong>{staged.summary.messages}</strong> message(s),{" "}
+            <strong>{staged.summary.pending}</strong> pending
+            {staged.summary.hasMigration ? ", and an in-progress key migration" : ""}.
+            {staged.summary.exportedUtc && (
+              <span className="muted"> Exported {staged.summary.exportedUtc.slice(0, 10)}.</span>
+            )}
+          </div>
+          {staged.identityConflict && (
+            <div className="warn">
+              ⚠ This backup’s identity is different from this device’s current identity. Restoring
+              will replace your current identity — you’ll appear as the backed-up identity to your
+              contacts.
+            </div>
+          )}
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={mode === "replace"}
+              onChange={(e) => setMode(e.target.checked ? "replace" : "merge")}
+            />
+            Replace (wipe this device first) instead of merge
+          </label>
+          <div className="board-row">
+            <button onClick={() => void doRestore()} disabled={busy !== null}>
+              {busy === "restore" ? "Restoring…" : mode === "replace" ? "Wipe & restore" : "Merge & restore"}
+            </button>
+            <button className="ghost" onClick={cancelStaged} disabled={busy !== null}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="info-text" role="status">
+          Restored {result.contactsImported} contact(s), {result.messagesImported} message(s),{" "}
+          {result.pendingImported} pending
+          {result.contactsSkipped + result.messagesSkipped > 0
+            ? ` (skipped ${result.contactsSkipped + result.messagesSkipped} already present)`
+            : ""}
+          .{" "}
+          {result.restartRequired && (
+            <strong>Restart Orpal to finish applying the restored identity.</strong>
+          )}
+        </div>
+      )}
+
+      {notice && <div className="info-text">{notice}</div>}
       {error && <div className="error-text">{error}</div>}
     </>
   );
