@@ -102,6 +102,12 @@ export class IpcConversationStore implements ConversationStore {
   listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]> {
     return window.orpal.store.listMessages(contactKey, opts);
   }
+  listAllMessages(): Promise<StoredMessage[]> {
+    return window.orpal.store.listAllMessages();
+  }
+  clear(): Promise<void> {
+    return window.orpal.store.clear();
+  }
 }
 
 /** Durable offline send-queue via the shell's store (IndexedDB in the browser
@@ -124,6 +130,9 @@ export class IpcPendingQueueStore implements PendingQueueStore {
   }
   list(): Promise<PendingMessage[]> {
     return window.orpal.pending.list();
+  }
+  clear(): Promise<void> {
+    return window.orpal.pending.clear();
   }
 }
 

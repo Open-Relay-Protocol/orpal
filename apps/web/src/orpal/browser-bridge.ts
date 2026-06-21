@@ -52,6 +52,7 @@ import {
   STORE_CONTACTS,
   STORE_MESSAGES,
   STORE_PENDING,
+  clearStore,
   del,
   get,
   getAll,
@@ -217,6 +218,11 @@ const bridge: OrpalBridge = {
       if (opts.limit !== undefined) rows = rows.slice(0, opts.limit);
       return rows;
     },
+    listAllMessages: () => getAll<StoredMessage>(STORE_MESSAGES),
+    clear: async () => {
+      await clearStore(STORE_CONTACTS);
+      await clearStore(STORE_MESSAGES);
+    },
   },
 
   pending: {
@@ -232,6 +238,7 @@ const bridge: OrpalBridge = {
     remove: (messageId: string) => del(STORE_PENDING, messageId),
     get: (messageId: string) => get<PendingMessage>(STORE_PENDING, messageId),
     list: () => getAll<PendingMessage>(STORE_PENDING),
+    clear: () => clearStore(STORE_PENDING),
   },
 
   files: {

@@ -86,6 +86,13 @@ export async function del(store: string, key: IDBValidKey): Promise<void> {
   await txDone(tx);
 }
 
+export async function clearStore(store: string): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(store, "readwrite");
+  tx.objectStore(store).clear();
+  await txDone(tx);
+}
+
 export async function getAll<T>(store: string): Promise<T[]> {
   const db = await openDb();
   const tx = db.transaction(store, "readonly");

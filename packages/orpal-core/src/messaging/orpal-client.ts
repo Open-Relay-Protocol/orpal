@@ -30,6 +30,16 @@ import {
 } from "../contacts/contact-export.js";
 import type { ConversationStore, StoredMessage } from "../persistence/conversation-store.js";
 import { InMemoryKeyStore } from "../identity/secure-store.js";
+import { IdentityManager } from "../identity/identity-manager.js";
+import {
+  openBackup,
+  parseBackupEnvelope,
+  serializeBackup,
+  summarizeBackup,
+  type BackupPayload,
+  type BackupSummary,
+  type DeviceBackup,
+} from "../backup/device-backup.js";
 import {
   decodeAppFrame,
   encodeAppFrame,
@@ -99,6 +109,39 @@ export interface LoopbackSelfTestResult {
   /** A short machine-readable reason when `ok` is false (e.g. "board-unreachable",
    *  "decrypt-mismatch"); undefined on success. */
   reason?: string;
+}
+
+/** Outcome of opening (decrypting) a backup file: the at-a-glance summary plus
+ *  whether the backup's identity differs from this device's current one (ORPAL-017).
+ *  The decrypted `payload` is handed back so a subsequent {@link OrpalClient.restoreBackup}
+ *  needn't re-derive the key. */
+export interface BackupOpenResult {
+  summary: BackupSummary;
+  /** True when the backup's identity key differs from this device's current
+   *  identity -- importing it REPLACES the local identity. Surfaced as a warning. */
+  identityConflict: boolean;
+  payload: BackupPayload;
+}
+
+/** What a {@link OrpalClient.restoreBackup} actually did (ORPAL-017). */
+export interface BackupRestoreResult {
+  mode: "merge" | "replace";
+  identityImported: boolean;
+  identityConflict: boolean;
+  contactsImported: number;
+  contactsSkipped: number;
+  contactsRejected: number;
+  messagesImported: number;
+  messagesSkipped: number;
+  pendingImported: number;
+  migrationRestored: boolean;
+  /** The block list now in effect (merged or replaced). */
+  blockedKeys: string[];
+  /** The decrypted app settings, opaque to core -- the shell persists them. */
+  settings: unknown;
+  /** True when the imported identity won't take effect until the app restarts
+   *  (the live DeviceIdentity is built once at startup). */
+  restartRequired: boolean;
 }
 
 export interface OrpalClientOptions {
@@ -374,6 +417,204 @@ export class OrpalClient {
     });
     for (const contact of contacts) await this.registerContact(contact);
     return summary;
+  }
+
+  // ---- full encrypted device backup / restore (ORPAL-017) ------------------
+
+  /**
+   * Produce a single password-sealed backup of the ENTIRE device state: identity
+   * private keys, every contact, full message history, the pending send queue, any
+   * in-flight migration (with its pending keys), the block list, and the shell's
+   * `settings` (passed in -- settings are shell-owned, opaque to core). Unlike
+   * {@link exportContacts}, this contains SECRETS; the password is the only thing
+   * protecting them, so the shell must warn the user and demand a strong one.
+   */
+  async exportBackup(password: string, settings: unknown): Promise<string> {
+    const keyStore = this.opts.keyStore;
+    if (!keyStore) throw new Error("Backup requires a keyStore to read the identity from.");
+    const identity = await keyStore.load();
+    if (!identity) throw new Error("No identity is stored on this device to back up.");
+
+    const contacts = await this.store.listContacts();
+    const messages: Record<string, StoredMessage[]> = {};
+    for (const m of await this.store.listAllMessages()) (messages[m.contactKey] ??= []).push(m);
+    const pending = this.pendingQueue ? await this.pendingQueue.list() : [];
+
+    let migrationState: BackupPayload["migrationState"] = this.opts.migrationStore
+      ? await this.opts.migrationStore.load()
+      : null;
+    if (migrationState && migrationState.phase !== "complete" && this.opts.migrationKeyStore) {
+      // The migration's new identity private keys live in their own sealed slot
+      // (ORPAL-013), NOT in the migration state. Embed them under the legacy
+      // `newStoredKeys` field so the importing device's MigrationManager.init()
+      // promotes them back into its sealed slot -- an in-flight migration survives.
+      const pendingKeys = await this.opts.migrationKeyStore.load();
+      migrationState = pendingKeys ? { ...migrationState, newStoredKeys: pendingKeys } : migrationState;
+    }
+
+    const payload: BackupPayload = {
+      identity,
+      contacts,
+      messages,
+      pending,
+      settings,
+      migrationState,
+      blockedKeys: [...this.blockedKeys],
+    };
+    return serializeBackup(payload, password, { now: this.opts.now });
+  }
+
+  /**
+   * Decrypt + validate a backup file with `password` WITHOUT committing anything.
+   * Returns the summary the UI shows before import, whether the backup's identity
+   * conflicts with this device's, and the decrypted payload to hand to
+   * {@link restoreBackup}. A wrong password / tampered file fails the AES-GCM auth
+   * check and surfaces as a `bad-password-or-corrupt` reason.
+   */
+  async readBackup(
+    input: string | DeviceBackup,
+    password: string,
+  ): Promise<{ ok: true; result: BackupOpenResult } | { ok: false; reason: string }> {
+    const opened = await openBackup(input, password);
+    if (!opened.ok) return { ok: false, reason: opened.reason };
+    const payload = opened.payload;
+    let identityKey: string | null = null;
+    try {
+      identityKey = IdentityManager.fromStored(payload.identity).identityKeyB64;
+    } catch {
+      identityKey = null;
+    }
+    const summary = summarizeBackup(payload, identityKey);
+    const env = parseBackupEnvelope(input);
+    if (env.envelope) summary.exportedUtc = env.envelope.exportedUtc;
+    return {
+      ok: true,
+      result: {
+        summary,
+        identityConflict: identityKey !== null && identityKey !== this.identityKey,
+        payload,
+      },
+    };
+  }
+
+  /**
+   * Commit a previously-{@link readBackup} payload to local state. `merge` adds
+   * only items that don't already exist locally (contacts by identity key, messages
+   * by id, pending by message id); `replace` wipes local contacts/messages/pending/
+   * migration first, then restores. Each contact's binding is re-validated exactly
+   * as a scanned card would be, so a tampered backup can't smuggle in a mismatched
+   * key. Importing the identity REPLACES this device's keys (a key migration to this
+   * device) and requires a restart to take effect; pass `importIdentity:false` to
+   * keep the current identity and restore only data.
+   */
+  async restoreBackup(
+    payload: BackupPayload,
+    opts: { mode: "merge" | "replace"; importIdentity?: boolean },
+  ): Promise<BackupRestoreResult> {
+    const mode = opts.mode;
+    const importIdentity = opts.importIdentity ?? true;
+
+    let backupIdentityKey: string | null = null;
+    try {
+      backupIdentityKey = IdentityManager.fromStored(payload.identity).identityKeyB64;
+    } catch {
+      backupIdentityKey = null;
+    }
+
+    const result: BackupRestoreResult = {
+      mode,
+      identityImported: false,
+      identityConflict: backupIdentityKey !== null && backupIdentityKey !== this.identityKey,
+      contactsImported: 0,
+      contactsSkipped: 0,
+      contactsRejected: 0,
+      messagesImported: 0,
+      messagesSkipped: 0,
+      pendingImported: 0,
+      migrationRestored: false,
+      blockedKeys: [],
+      settings: payload.settings,
+      restartRequired: false,
+    };
+
+    if (mode === "replace") {
+      await this.store.clear();
+      this.contacts.clear();
+      if (this.pendingQueue) await this.pendingQueue.clear();
+      await this.opts.migrationStore?.clear();
+    }
+
+    // Contacts: re-validate every binding through the SAME check a single scanned
+    // card takes (anti-substitution, §2.1), then upsert the full record (all
+    // fields preserved, incl. the loopback tag) so the restore is faithful.
+    const existing = new Set((await this.store.listContacts()).map((c) => c.identityKey));
+    for (const c of payload.contacts) {
+      const card = {
+        v: 1,
+        kind: "orpal-contact",
+        identity_key: c.identityKey,
+        transport_key: c.transportKey,
+        binding: c.binding,
+        name: c.displayName,
+      };
+      if (!parseContactCard(JSON.stringify(card)).valid) {
+        result.contactsRejected++;
+        continue;
+      }
+      if (mode === "merge" && existing.has(c.identityKey)) {
+        result.contactsSkipped++;
+        continue;
+      }
+      await this.registerContact(c);
+      existing.add(c.identityKey);
+      result.contactsImported++;
+    }
+
+    // Message history.
+    for (const list of Object.values(payload.messages)) {
+      for (const m of list) {
+        if (mode === "merge" && (await this.store.getMessage(m.id))) {
+          result.messagesSkipped++;
+          continue;
+        }
+        await this.store.appendMessage(m);
+        result.messagesImported++;
+      }
+    }
+
+    // Pending send queue: route through the worker when present so retries resume.
+    for (const p of payload.pending) {
+      if (mode === "merge" && this.pendingQueue && (await this.pendingQueue.get(p.messageId))) continue;
+      if (this.worker) await this.worker.enqueue(p);
+      else if (this.pendingQueue) await this.pendingQueue.enqueue(p);
+      result.pendingImported++;
+    }
+
+    // In-flight migration state (with its embedded pending keys); picked up on the
+    // next startup by MigrationManager.init().
+    if (payload.migrationState && this.opts.migrationStore) {
+      await this.opts.migrationStore.save(payload.migrationState);
+      result.migrationRestored = true;
+    }
+
+    // Block list.
+    const blockedKeys =
+      mode === "replace"
+        ? [...new Set(payload.blockedKeys)]
+        : [...new Set([...this.blockedKeys, ...payload.blockedKeys])];
+    this.setBlockedKeys(blockedKeys);
+    result.blockedKeys = blockedKeys;
+
+    // Identity: this is the key migration to this device. The live DeviceIdentity
+    // is built once at startup, so a restart is required for it to take effect.
+    if (importIdentity && this.opts.keyStore) {
+      await this.opts.keyStore.clear();
+      await this.opts.keyStore.save(payload.identity);
+      result.identityImported = true;
+      result.restartRequired = true;
+    }
+
+    return result;
   }
 
   /** Ensure the diagnostic loopback test contact exists (issue #41), creating it

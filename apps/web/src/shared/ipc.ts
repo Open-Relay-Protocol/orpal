@@ -93,6 +93,10 @@ export interface OrpalBridge {
     updateMessage(id: string, patch: MessagePatch): Promise<void>;
     getMessage(id: string): Promise<StoredMessage | null>;
     listMessages(contactKey: string, opts?: ListMessagesOptions): Promise<StoredMessage[]>;
+    /** Every message across all conversations (full-device backup, ORPAL-017). */
+    listAllMessages(): Promise<StoredMessage[]>;
+    /** Wipe all contacts + messages (a "replace" restore, ORPAL-017). */
+    clear(): Promise<void>;
   };
   /** Durable offline send-queue (IndexedDB in the browser shell): outbound
    *  messages persisted until the recipient acknowledges (see @orpal/core's
@@ -104,6 +108,8 @@ export interface OrpalBridge {
     remove(messageId: string): Promise<void>;
     get(messageId: string): Promise<PendingMessage | null>;
     list(): Promise<PendingMessage[]>;
+    /** Remove every queued message (a "replace" restore, ORPAL-017). */
+    clear(): Promise<void>;
   };
   /** Streaming file I/O for transfers -- bytes are never buffered whole in memory. */
   files: {

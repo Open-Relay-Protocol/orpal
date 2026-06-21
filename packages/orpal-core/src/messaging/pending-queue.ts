@@ -63,6 +63,8 @@ export interface PendingQueueStore {
   get(messageId: string): Promise<PendingMessage | null>;
   /** All currently-queued messages, in no particular order. */
   list(): Promise<PendingMessage[]>;
+  /** Remove every queued message. Used by a "replace" restore (ORPAL-017). */
+  clear(): Promise<void>;
 }
 
 /** Local observability snapshot of the pending queue (issue #17): queue health
@@ -124,5 +126,8 @@ export class InMemoryPendingQueueStore implements PendingQueueStore {
   }
   async list(): Promise<PendingMessage[]> {
     return [...this.rows.values()].map((m) => ({ ...m }));
+  }
+  async clear(): Promise<void> {
+    this.rows.clear();
   }
 }
