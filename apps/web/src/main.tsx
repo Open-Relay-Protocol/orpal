@@ -7,8 +7,11 @@ import { createRoot } from "react-dom/client";
 import { App } from "@/components/App.js";
 import "@/styles.css";
 import { installBrowserBridge } from "./orpal/browser-bridge.js";
+import { applySkin, loadSkin } from "./orpal/skins.js";
 
 installBrowserBridge();
+// Apply the saved skin (ORPAL-019) before first paint so there's no theme flash.
+applySkin(loadSkin());
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

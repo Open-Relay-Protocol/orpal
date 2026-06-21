@@ -46,6 +46,7 @@ import {
   type OrpalBridge,
   type ReadHandle,
   type WriteHandle,
+  type WriteMeta,
 } from "@shared/ipc";
 import {
   STORE_CONTACTS,
@@ -88,6 +89,19 @@ function mimeFor(name: string, declared: string): string {
   return MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
 
+function isImageMime(mime: string): boolean {
+  return mime.startsWith("image/");
+}
+
+// ---- ORPAL-019: verified image bytes kept in memory for inline previews ----
+// Keyed by the transfer's fileId. Received images land here on finalize (instead
+// of auto-downloading); outgoing images are copied here from the picked File.
+// Cleared only when the page is torn down -- previews are a session affordance,
+// so after a reload the UI falls back to the plain attachment row. Object URLs
+// are minted lazily and cached so each fileId yields a single stable URL.
+const imageBlobs = new Map<string, Blob>();
+const imageUrls = new Map<string, string>();
+
 // ---- file SEND side: a picked File lives here, keyed by the synthetic "path" ----
 const pickedFiles = new Map<string, File>();
 
@@ -127,6 +141,10 @@ interface WriteEntry {
   name: string;
   // offset -> bytes; the engine writes idempotently and possibly out of order.
   chunks: Map<number, Uint8Array>;
+  // ORPAL-019: carried from the file offer so finalize can recognise an image
+  // and retain its verified bytes for an inline preview instead of downloading.
+  fileId?: string;
+  mime?: string;
 }
 const writes = new Map<string, WriteEntry>();
 
@@ -256,9 +274,9 @@ const bridge: OrpalBridge = {
       pickedFiles.delete(handleId);
     },
 
-    openWrite: async (name: string): Promise<WriteHandle> => {
+    openWrite: async (name: string, meta?: WriteMeta): Promise<WriteHandle> => {
       const handleId = crypto.randomUUID();
-      writes.set(handleId, { name, chunks: new Map() });
+      writes.set(handleId, { name, chunks: new Map(), fileId: meta?.fileId, mime: meta?.mime });
       // No real filesystem path on the web -- surface the chosen name.
       return { handleId, path: name };
     },
@@ -276,12 +294,36 @@ const bridge: OrpalBridge = {
       writes.delete(handleId);
       const bytes = assemble(entry);
       const hash = bytesToHex(sha256(bytes));
-      triggerDownload(entry.name, bytes); // hand the completed, verified file to the user
+      // ORPAL-019: keep a verified image in memory for an inline preview rather
+      // than streaming it to disk (consistent with the "no unprompted download"
+      // intent); the lightbox offers an explicit download. Everything else hands
+      // the completed file straight to the user as before.
+      if (entry.fileId && entry.mime && isImageMime(entry.mime)) {
+        imageBlobs.set(entry.fileId, new Blob([bytes], { type: entry.mime }));
+      } else {
+        triggerDownload(entry.name, bytes);
+      }
       return { sha256: hash, path: entry.name };
     },
 
     abortWrite: async (handleId: string): Promise<void> => {
       writes.delete(handleId);
+    },
+
+    imageObjectUrl: async (fileId: string): Promise<string | null> => {
+      const cached = imageUrls.get(fileId);
+      if (cached) return cached;
+      const blob = imageBlobs.get(fileId);
+      if (!blob) return null;
+      const url = URL.createObjectURL(blob);
+      imageUrls.set(fileId, url);
+      return url;
+    },
+
+    retainOutgoingImage: async (fileId: string, path: string, mime: string): Promise<void> => {
+      if (!isImageMime(mime)) return;
+      const file = pickedFiles.get(path);
+      if (file) imageBlobs.set(fileId, file);
     },
 
     reveal: async (): Promise<void> => {

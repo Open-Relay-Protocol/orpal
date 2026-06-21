@@ -20,6 +20,7 @@ import {
   type IceForm,
   type IceTestResult,
 } from "../orpal/ice-config.js";
+import { SKINS, type SkinId } from "../orpal/skins.js";
 
 type TestState =
   | { phase: "idle" }
@@ -46,6 +47,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     runSelfTest,
     blockedKeys,
     unblockContact,
+    skin,
+    setSkin,
   } = useOrpal();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
@@ -175,6 +178,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Settings" onClose={onClose}>
+      <SkinsSection active={skin} onPick={setSkin} />
+
       <label className="field-label">Boards (ws:// or wss://) — federated</label>
       {boards.map((url, i) => (
         <div className="board-row" key={i}>
@@ -798,6 +803,41 @@ function BlockedSection({
           ))}
         </>
       )}
+    </>
+  );
+}
+
+// ORPAL-019: the "SKINS" picker. Every option is a faithful Winamp/retro variant
+// (just a swapped CSS token set); choosing one applies + persists it immediately.
+function SkinsSection({ active, onPick }: { active: SkinId; onPick: (id: SkinId) => void }) {
+  return (
+    <>
+      <label className="field-label">Skins</label>
+      <p className="muted">
+        Make Orpal yours. Each skin keeps the Winamp look — beveled chrome, an LCD readout — with a
+        different palette. Your pick is saved on this device and survives restarts.
+      </p>
+      <div className="skins-grid">
+        {SKINS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`skin-chip ${active === s.id ? "active" : ""}`}
+            onClick={() => onPick(s.id)}
+            aria-pressed={active === s.id}
+            title={s.blurb}
+          >
+            <span className="skin-swatch" style={{ background: s.swatch.bg }} aria-hidden="true">
+              <span className="skin-swatch-chrome" style={{ background: s.swatch.chrome }} />
+              <span className="skin-swatch-accent" style={{ background: s.swatch.accent }} />
+            </span>
+            <span className="skin-meta">
+              <span className="skin-name">{s.name}</span>
+              <span className="skin-blurb muted">{s.blurb}</span>
+            </span>
+          </button>
+        ))}
+      </div>
     </>
   );
 }
