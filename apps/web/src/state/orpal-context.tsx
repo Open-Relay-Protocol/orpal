@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   shortKey,
+  type BackupPayload,
   type Contact,
   type ContactRequest,
   type ContactState,
@@ -121,6 +122,9 @@ interface OrpalContextValue {
   acceptMigration: (contactKey: string) => Promise<boolean>;
   declineMigration: (contactKey: string) => void;
   setAutoAcceptMigration: (key: string, value: boolean) => Promise<void>;
+
+  gatherBackupPayload: () => Promise<BackupPayload>;
+  restoreBackupPayload: (payload: BackupPayload) => Promise<void>;
 }
 
 // Placeholder settings before the real ones load (empty, not the real defaults,
@@ -551,6 +555,51 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     [refreshContacts],
   );
 
+  const gatherBackupPayload = useCallback(async (): Promise<BackupPayload> => {
+    const orpal = orpalRef.current;
+    if (!orpal) throw new Error("not ready");
+    const contactList = await orpal.listContacts();
+    const messages: Record<string, StoredMessage[]> = {};
+    for (const c of contactList) {
+      messages[c.identityKey] = await orpal.history(c.identityKey, { limit: 100_000 });
+    }
+    const keys = await window.orpal.keys.load();
+    if (!keys) throw new Error("No identity keys found");
+    const pending = await window.orpal.pending.list();
+    const currentSettings = await window.orpal.settings.get();
+    const migrationState = await kvGet("migrationState");
+    return {
+      identity: keys as any,
+      contacts: contactList,
+      messages,
+      pending,
+      settings: { ...currentSettings, blockedKeys: currentSettings.blockedKeys ?? [] },
+      migrationState: migrationState as any ?? null,
+    };
+  }, []);
+
+  const restoreBackupPayload = useCallback(async (payload: BackupPayload): Promise<void> => {
+    await window.orpal.keys.save(payload.identity as any);
+    const store = window.orpal.store;
+    for (const contact of payload.contacts) {
+      await store.upsertContact(contact);
+    }
+    for (const [, msgs] of Object.entries(payload.messages)) {
+      for (const msg of msgs) {
+        await store.appendMessage(msg);
+      }
+    }
+    for (const msg of payload.pending ?? []) {
+      await window.orpal.pending.enqueue(msg);
+    }
+    if (payload.settings) {
+      await window.orpal.settings.set(payload.settings as any);
+    }
+    if (payload.migrationState) {
+      await kvSet("migrationState", payload.migrationState);
+    }
+  }, []);
+
   const blockedKeys = settings?.blockedKeys ?? [];
 
   const conversations = useMemo<Conversation[]>(() => {
@@ -636,6 +685,8 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     acceptMigration,
     declineMigration,
     setAutoAcceptMigration,
+    gatherBackupPayload,
+    restoreBackupPayload,
   };
 
   return <OrpalContext.Provider value={value}>{children}</OrpalContext.Provider>;
