@@ -35,6 +35,10 @@ export interface AppSettings {
    *  wake this device while the app is closed. Off by default (no token leaves
    *  the device; you're only reachable while the app is open). */
   pushNotifications: boolean;
+  /** Identity keys the user has blocked. Blocked peers have their inbound
+   *  connection refused at the protocol level (no message/file/card is accepted)
+   *  and are hidden from the conversation list. */
+  blockedKeys: string[];
 }
 
 export interface FilePick {
@@ -142,4 +146,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   relayOnlyByDefault: false,
   // Off by default: opting in is a deliberate privacy trade-off (see Settings).
   pushNotifications: false,
+  // Nobody blocked to start.
+  blockedKeys: [],
 };

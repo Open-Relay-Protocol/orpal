@@ -143,8 +143,23 @@ export type OrpalEvents = {
   pending: { metrics: PendingMetrics };
   "migration-progress": { progress: MigrationProgress };
   "migration-incoming": { pending: PendingMigration };
+  /** An unknown sender (not yet a contact) messaged us and handed us their card
+   *  in-band. The UI can prompt the user to accept (add as a full contact) or
+   *  block them. `name` is the sender's self-chosen card name, if any. */
+  "contact-request": { contactKey: string; card: string; name?: string };
   error: { error: unknown; context: string };
 };
+
+/** A pending request from an unknown sender awaiting the user's accept/block
+ *  decision (see {@link OrpalEvents}'s `contact-request`). */
+export interface ContactRequest {
+  contactKey: string;
+  /** The sender's serialized contact card (verified binding, bound to the
+   *  authenticated connection). */
+  card: string;
+  /** The sender's self-chosen name from their card, if any. */
+  name?: string;
+}
 
 interface BoardEntry {
   id: string;
@@ -181,6 +196,13 @@ export class OrpalClient {
   private readonly contacts = new ContactRegistry();
   private readonly conns = new ConnectionManager();
   private readonly updateChains = new Map<string, Promise<void>>();
+
+  /** Identity keys the user has blocked. Blocked peers have their inbound
+   *  connection refused (handleConnected) and any stray frame dropped. */
+  private blockedKeys = new Set<string>();
+  /** Cards received in-band from unknown senders, keyed by identity key, awaiting
+   *  the user's accept/block decision. In-memory only: re-sent on reconnect. */
+  private readonly pendingCards = new Map<string, ContactRequest>();
 
   private presenceTimer: ReturnType<typeof setInterval> | null = null;
   private started = false;
@@ -465,6 +487,49 @@ export class OrpalClient {
     await this.store.upsertContact(contact);
   }
 
+  // ---- block list + contact requests ---------------------------------------
+
+  /** Replace the set of blocked identity keys. Any currently-live connection to a
+   *  now-blocked peer is torn down immediately, and any pending contact request
+   *  from them is discarded. New inbound connections from blocked keys are refused
+   *  in `handleConnected`. */
+  setBlockedKeys(keys: Iterable<string>): void {
+    this.blockedKeys = new Set(keys);
+    for (const key of this.blockedKeys) {
+      this.conns.dropConnection(key);
+      this.pendingCards.delete(key);
+    }
+  }
+
+  isBlocked(identityKey: string): boolean {
+    return this.blockedKeys.has(identityKey);
+  }
+
+  /** Unknown senders awaiting an accept/block decision. */
+  get contactRequests(): readonly ContactRequest[] {
+    return [...this.pendingCards.values()];
+  }
+
+  /** Accept an unknown sender: add them as a full two-way contact from the card
+   *  they handed us in-band, optionally with a chosen display name. Returns the
+   *  same shape as `addContactFromCard`. */
+  async acceptContactRequest(
+    identityKey: string,
+    displayName?: string,
+  ): Promise<{ ok: true; contact: Contact } | { ok: false; reason: string }> {
+    const req = this.pendingCards.get(identityKey);
+    if (!req) return { ok: false, reason: "no-pending-request" };
+    const res = await this.addContactFromCard(req.card, { displayName });
+    if (res.ok) this.pendingCards.delete(identityKey);
+    return res;
+  }
+
+  /** Dismiss a pending contact request without accepting or blocking (e.g. the
+   *  user closed the prompt). It will reappear if the sender reconnects. */
+  dismissContactRequest(identityKey: string): void {
+    this.pendingCards.delete(identityKey);
+  }
+
   async setAutoAcceptMigration(identityKey: string, autoAccept: boolean): Promise<void> {
     const contact = await this.store.getContact(identityKey);
     if (!contact) return;
@@ -732,6 +797,13 @@ export class OrpalClient {
   private async handleConnected(board: BoardEntry, info: ConnectedInfo): Promise<void> {
     const contactKey = info.counterparty_key;
     const matchKey = mk(board.id, info.match_id);
+    // Block enforcement: refuse a blocked peer's connection outright -- close the
+    // freshly-matched endpoint and never wire up a channel, so no message, file,
+    // or card can be delivered.
+    if (this.blockedKeys.has(contactKey)) {
+      this.conns.getEndpoint(matchKey)?.close();
+      return;
+    }
     const existing = this.conns.getConnection(contactKey);
     if (existing && existing.matchKey !== matchKey) {
       if (existing.state === "connected") { this.conns.getEndpoint(matchKey)?.close(); return; }
@@ -744,6 +816,13 @@ export class OrpalClient {
     this.conns.setConnection(contactKey, conn);
     this.conns.emitState(contactKey, "connected");
     this.conns.resolveConnectWaiters(contactKey, conn);
+    // In-band card exchange: hand the peer our card so an unknown sender can add
+    // us back as a full two-way contact. The card carries no secrets and rides
+    // the already-encrypted channel. (No name attached -- they already reached us
+    // via our card, so this leaks nothing new.)
+    conn.channel
+      .send(encodeAppFrame({ v: 1, t: "hello", card: this.ownContactCard() }))
+      .catch(() => { /* best-effort; not delivery-critical */ });
     void this.worker?.flushRecipient(contactKey);
   }
 
@@ -766,6 +845,9 @@ export class OrpalClient {
   }
 
   private async handleIncomingFrame(contactKey: string, text: string): Promise<void> {
+    // Defence in depth: a connection blocked mid-flight is torn down, but drop any
+    // frame that still slips through before teardown completes.
+    if (this.blockedKeys.has(contactKey)) return;
     const outer = decodeAppFrame(text);
     if (!outer) return;
     if (outer.t === "sealed") {
@@ -788,6 +870,22 @@ export class OrpalClient {
       case "awk": {
         if (this.worker) { const removed = await this.worker.acknowledge(frame.id); if (removed) await this.markMessage(frame.id, { state: "acknowledged" }); }
         else { await this.markMessage(frame.id, { state: "acknowledged" }); }
+        return;
+      }
+      case "hello": {
+        // A peer handed us their card in-band. Validate the binding and bind it to
+        // the AUTHENTICATED counterparty: a connected peer may only ever present
+        // its OWN card, never inject a third party's.
+        const parsed = parseContactCard(frame.card);
+        if (!parsed.valid || !parsed.card) return;
+        if (parsed.card.identity_key !== contactKey) return;
+        if (parsed.card.identity_key === this.identityKey) return; // our own echo
+        // Already known (or already pending): nothing to ask the user.
+        if (await this.store.getContact(contactKey)) return;
+        if (this.pendingCards.has(contactKey)) return;
+        const req: ContactRequest = { contactKey, card: frame.card, name: parsed.card.name };
+        this.pendingCards.set(contactKey, req);
+        this.events.emit("contact-request", req);
         return;
       }
       case "file-offer": {

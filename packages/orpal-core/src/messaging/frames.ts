@@ -110,6 +110,29 @@ export interface SealedFrame {
   box: string;
 }
 
+/**
+ * In-band contact-card exchange (contact requests).
+ *
+ * Sent once over a freshly-established channel so each side learns the OTHER's
+ * shareable contact card -- identity key, transport key, and the signed binding
+ * that ties them together. This is what lets a recipient ACCEPT an unknown sender
+ * and add them as a full, two-way contact: until we hold a peer's transport key
+ * we can receive their sealed messages but cannot seal a reply back to them.
+ *
+ * The card itself carries no secrets (it is meant to be shared) and the binding
+ * is self-signed, so it rides the channel unsealed -- but the channel is already
+ * end-to-end encrypted by the ORP SecureChannel, so the card is never exposed on
+ * the wire. The receiver MUST additionally verify the card's identity key equals
+ * the authenticated counterparty of the connection, so a peer can only ever
+ * present its OWN card, never inject a third party's.
+ */
+export interface HelloFrame {
+  v: 1;
+  t: "hello";
+  /** The sender's own serialized {@link ContactCard} JSON (see contact.ts). */
+  card: string;
+}
+
 /** Wraps an ORP-004 key_migration record, sent over an existing channel to
  *  notify a contact of an identity rotation. */
 export interface KeyMigrationFrame {
@@ -158,6 +181,7 @@ export type AppFrame =
   | FileChunkFrame
   | FileDoneFrame
   | SealedFrame
+  | HelloFrame
   | KeyMigrationFrame
   | MigrationAckFrame
   | MigrationChallengeFrame
@@ -228,6 +252,11 @@ export function decodeAppFrame(text: string): AppFrame | null {
     case "sealed":
       if (f.alg === SEAL_ALG && typeof f.box === "string") {
         return { v: 1, t: "sealed", alg: SEAL_ALG, box: f.box };
+      }
+      return null;
+    case "hello":
+      if (typeof f.card === "string") {
+        return { v: 1, t: "hello", card: f.card };
       }
       return null;
     case "key-migration":

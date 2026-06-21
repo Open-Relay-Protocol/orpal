@@ -69,6 +69,15 @@ The same codebase ships two ways from one shared, framework-agnostic core:
   renders as a **QR code**; contacts
   import by **scanning** (webcam + jsQR) or **pasting**, with full binding
   validation (anti-substitution).
+- **Contact requests & blocking** — when an **unknown sender** (someone who has
+  your card but isn't in your contacts) messages you, the peers exchange cards
+  **in-band** over the already-encrypted channel (a `hello` frame carrying the
+  signed binding, bound to the connection's authenticated identity so a peer can
+  only present its *own* card). You're prompted to **accept** them — naming them
+  and adding a full two-way contact you can reply to — or **block** them. Blocked
+  identities are **refused at the protocol level** (their inbound connection is
+  torn down, no message/file/card gets through) and hidden from the conversation
+  list; manage the block list in **Settings**.
 - **Per-contact board routing** — each contact can carry its own **board routes**
   (preferred + fallback). When set, delivery to that contact uses *only* those
   boards instead of fanning an intent out to every board; unset contacts keep the
