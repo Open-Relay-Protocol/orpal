@@ -34,6 +34,9 @@ export * from "./messaging/delivery-worker.js";
 export * from "./messaging/migration-manager.js";
 export * from "./transfer/file-transfer.js";
 
+// Backup / restore.
+export * from "./backup/backup.js";
+
 // Utilities.
 export { TypedEmitter } from "./util/events.js";
 export type { Listener } from "./util/events.js";
