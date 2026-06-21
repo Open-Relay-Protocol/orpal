@@ -19,6 +19,9 @@ export * from "./identity/identity-manager.js";
 // Contacts.
 export * from "./contacts/contact.js";
 
+// Contacts -- bulk export / import + loopback diagnostic contact (issue #41).
+export * from "./contacts/contact-export.js";
+
 // Persistence abstraction.
 export * from "./persistence/conversation-store.js";
 

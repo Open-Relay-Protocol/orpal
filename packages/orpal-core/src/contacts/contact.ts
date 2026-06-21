@@ -36,6 +36,14 @@ export interface Contact {
    *  verification (ORPAL-008). When false, a manual prompt is shown instead. */
   autoAcceptMigration?: boolean;
   addedUtc: string;
+  /**
+   * Diagnostic self-test contact (issue #41): derived from this device's OWN
+   * PublicIdentity so a user can verify their board / STUN-TURN / sealing pipeline
+   * end-to-end without a second peer. The UI badges it; it is EXCLUDED from
+   * contact export bundles (it's device-specific and re-created locally) and can
+   * be deleted at any time.
+   */
+  isLoopback?: boolean;
 }
 
 /** The serializable card encoded into a QR / pasted between devices. */
@@ -135,6 +143,33 @@ export function contactFromCard(
     fallbackBoards: opts.fallbackBoards ?? [],
     addedUtc: (opts.now ?? (() => new Date().toISOString()))(),
   };
+}
+
+/** Default display name for the diagnostic loopback contact (issue #41). */
+export const LOOPBACK_NAME = "Test (me)";
+
+/**
+ * Build the diagnostic "loopback" test contact from this device's OWN public
+ * identity (issue #41). It deliberately reuses the exact same pipeline a real
+ * card takes -- `serializeContactCard` -> `parseContactCard` -> `contactFromCard`
+ * -- so the binding is validated identically; the only difference is the
+ * `isLoopback` tag and that it points at the device's own identity/transport key.
+ * Messaging it seals a box to the user's own transport key and round-trips it
+ * back, exercising board match + ICE + sealing without needing a second person.
+ */
+export function makeLoopbackContact(
+  pub: PublicIdentity,
+  opts: { name?: string; now?: () => string } = {},
+): Contact {
+  const parsed = parseContactCard(serializeContactCard(pub, opts.name ?? LOOPBACK_NAME));
+  if (!parsed.valid || !parsed.card) {
+    // The device's own card failing self-validation means a broken identity --
+    // surface it loudly rather than storing a half-formed contact.
+    throw new Error(`makeLoopbackContact: own card failed validation (${parsed.reason})`);
+  }
+  const contact = contactFromCard(parsed.card, { now: opts.now });
+  contact.isLoopback = true;
+  return contact;
 }
 
 /** A short, human-readable fingerprint of an identity key for default names. */

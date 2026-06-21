@@ -280,6 +280,39 @@ const bridge: OrpalBridge = {
       // No OS file manager to reveal into on the web; the file was downloaded on
       // finalize, so this is a no-op.
     },
+
+    saveText: async (name: string, text: string): Promise<void> => {
+      // Reuse the same download path as received files (issue #41 contact export).
+      triggerDownload(name, new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>);
+    },
+
+    openText: (): Promise<string | null> =>
+      new Promise((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "application/json,.json,text/plain";
+        input.style.display = "none";
+        document.body.appendChild(input);
+        const cleanup = () => input.remove();
+        input.addEventListener(
+          "change",
+          () => {
+            const file = input.files?.[0];
+            cleanup();
+            if (!file) return resolve(null);
+            file
+              .text()
+              .then((t) => resolve(t))
+              .catch(() => resolve(null));
+          },
+          { once: true },
+        );
+        input.addEventListener("cancel", () => {
+          cleanup();
+          resolve(null);
+        });
+        input.click();
+      }),
   },
 
   settings: {

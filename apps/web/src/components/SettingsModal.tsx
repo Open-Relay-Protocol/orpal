@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useOrpal } from "../state/orpal-context.js";
 import { Modal } from "./Modal.js";
 import type { IceServer } from "@shared/ipc";
+import type { ImportSummary, LoopbackSelfTestResult } from "@orpal/core";
 import {
   configHasTurn,
   formToIceServers,
@@ -21,8 +22,19 @@ type TestState =
   | { phase: "error"; message: string };
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { settings, saveSettings, settingsNeedRestart, pushEnabled, pushSupported, setPushEnabled } =
-    useOrpal();
+  const {
+    settings,
+    saveSettings,
+    settingsNeedRestart,
+    pushEnabled,
+    pushSupported,
+    setPushEnabled,
+    contacts,
+    exportContacts,
+    importContacts,
+    createTestContact,
+    runSelfTest,
+  } = useOrpal();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
 
@@ -320,6 +332,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       )}
       {pushError && <div className="error-text">{pushError}</div>}
 
+      <ContactsSection
+        hasLoopback={contacts.some((c) => c.isLoopback)}
+        onExport={exportContacts}
+        onImport={importContacts}
+        onCreateTest={createTestContact}
+        onSelfTest={runSelfTest}
+      />
+
       {error && <div className="error-text">{error}</div>}
       {(saved || settingsNeedRestart) && (
         <div className="info-text">Saved. Restart Orpal to apply board / ICE changes.</div>
@@ -332,6 +352,144 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </button>
       </div>
     </Modal>
+  );
+}
+
+// Human-readable reasons for a rejected import entry (issue #41), mirroring the
+// single-card add flow's binding-validation messages.
+const IMPORT_REASONS: Record<string, string> = {
+  "not-valid-json": "not valid JSON",
+  "not-an-orpal-contact-card": "not an Orpal contact",
+  "missing-fields": "missing required fields",
+  "bad-binding-signature": "invalid key-binding signature",
+  "binding-identity-mismatch": "binding doesn’t match the identity key",
+  "binding-transport-mismatch": "binding doesn’t match the transport key",
+  "that-is-your-own-card": "your own identity",
+};
+
+function ContactsSection(props: {
+  hasLoopback: boolean;
+  onExport: () => Promise<void>;
+  onImport: (onCollision: "skip" | "overwrite") => Promise<ImportSummary | null>;
+  onCreateTest: () => Promise<void>;
+  onSelfTest: () => Promise<LoopbackSelfTestResult>;
+}) {
+  const [collision, setCollision] = useState<"skip" | "overwrite">("skip");
+  const [busy, setBusy] = useState<null | "export" | "import" | "test" | "selftest">(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [selfTest, setSelfTest] = useState<LoopbackSelfTestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (kind: "export" | "import" | "test" | "selftest", fn: () => Promise<void>) => {
+    setError(null);
+    setBusy(kind);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doExport = () =>
+    run("export", async () => {
+      // Writing a file to disk is an explicit, confirmed action (issue #41).
+      if (!window.confirm("Export your contacts to a file? It contains no private keys or messages, but anyone with the file can see who you know.")) {
+        return;
+      }
+      await props.onExport();
+    });
+
+  const doImport = () =>
+    run("import", async () => {
+      setSummary(null);
+      const result = await props.onImport(collision);
+      if (result) setSummary(result);
+    });
+
+  const doSelfTest = () =>
+    run("selftest", async () => {
+      setSelfTest(null);
+      setSelfTest(await props.onSelfTest());
+    });
+
+  return (
+    <>
+      <label className="field-label">Contacts backup &amp; test</label>
+      <p className="muted">
+        Export your contacts to a file to back them up or move them to another device, then import
+        the file there. Bindings are re-verified on import; private keys and message history are
+        never exported.
+      </p>
+
+      <div className="board-row">
+        <button className="ghost" onClick={doExport} disabled={busy !== null}>
+          {busy === "export" ? "Exporting…" : "Export contacts"}
+        </button>
+        <button className="ghost" onClick={doImport} disabled={busy !== null}>
+          {busy === "import" ? "Importing…" : "Import contacts"}
+        </button>
+      </div>
+
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={collision === "overwrite"}
+          onChange={(e) => setCollision(e.target.checked ? "overwrite" : "skip")}
+        />
+        On import, overwrite contacts I already have (default: keep mine)
+      </label>
+
+      {summary && (
+        <div className="info-text" role="status">
+          Imported {summary.imported}, skipped {summary.skipped}, rejected {summary.rejected.length}.
+          {summary.rejected.length > 0 && (
+            <ul className="ice-errors">
+              {summary.rejected.map((r, i) => (
+                <li key={i}>
+                  {r.identityKey === "(bundle)" ? "File" : r.identityKey.slice(0, 10) + "…"}:{" "}
+                  {IMPORT_REASONS[r.reason] ?? r.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <label className="field-label">Test contact (self-check)</label>
+      <p className="muted">
+        A diagnostic “Test (me)” contact lets you verify your board connection and encryption keys
+        without a second person. The self-test checks the board is reachable and that messages seal
+        and open with your own keys.
+      </p>
+      <div className="board-row">
+        <button
+          className="ghost"
+          onClick={() => run("test", props.onCreateTest)}
+          disabled={busy !== null || props.hasLoopback}
+        >
+          {props.hasLoopback ? "Test contact exists" : busy === "test" ? "Creating…" : "Create test contact"}
+        </button>
+        <button className="ghost" onClick={doSelfTest} disabled={busy !== null}>
+          {busy === "selftest" ? "Testing…" : "Run self-test"}
+        </button>
+      </div>
+
+      {selfTest && (
+        <div className="info-text" role="status">
+          <span className={selfTest.boardReachable ? "ok" : "warn"}>
+            {selfTest.boardReachable ? "✓ Board reachable" : "✗ Board not reachable"}
+          </span>{" "}
+          <span className={selfTest.cryptoRoundTrip ? "ok" : "warn"}>
+            {selfTest.cryptoRoundTrip ? "✓ Encryption keys OK" : "✗ Encryption check failed"}
+          </span>
+          {!selfTest.ok && selfTest.reason && <span className="muted"> — {selfTest.reason}</span>}
+        </div>
+      )}
+
+      {error && <div className="error-text">{error}</div>}
+    </>
   );
 }
 

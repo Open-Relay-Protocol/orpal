@@ -20,7 +20,14 @@ import type {
 import { TypedEmitter } from "../util/events.js";
 import { BrowserWebRTCEndpoint } from "../rtc/browser-webrtc.js";
 import type { Contact } from "../contacts/contact.js";
-import { contactFromCard, parseContactCard, serializeContactCard } from "../contacts/contact.js";
+import { contactFromCard, makeLoopbackContact, parseContactCard, serializeContactCard } from "../contacts/contact.js";
+import {
+  importContacts as importContactsBundle,
+  parseContactsExport,
+  serializeContacts,
+  type ContactsExport,
+  type ImportSummary,
+} from "../contacts/contact-export.js";
 import type { ConversationStore, StoredMessage } from "../persistence/conversation-store.js";
 import { InMemoryKeyStore } from "../identity/secure-store.js";
 import {
@@ -81,6 +88,17 @@ export class NoPinnedKeyError extends Error {
 export interface IncomingFileSink {
   sink: FileSink;
   path?: string;
+}
+
+/** Result of the loopback diagnostic self-test (issue #41). `ok` is true only
+ *  when BOTH the board is reachable and the local seal/open crypto round-trips. */
+export interface LoopbackSelfTestResult {
+  ok: boolean;
+  boardReachable: boolean;
+  cryptoRoundTrip: boolean;
+  /** A short machine-readable reason when `ok` is false (e.g. "board-unreachable",
+   *  "decrypt-mismatch"); undefined on success. */
+  reason?: string;
 }
 
 export interface OrpalClientOptions {
@@ -281,6 +299,14 @@ export class OrpalClient {
       return { ok: false, reason: "that-is-your-own-card" };
     }
     const contact = contactFromCard(parsed.card, opts);
+    await this.registerContact(contact);
+    return { ok: true, contact };
+  }
+
+  /** Persist a contact and mirror it into the in-memory registry so sealing /
+   *  routing see it immediately (shared by single-card add, bulk import, and the
+   *  loopback contact). */
+  private async registerContact(contact: Contact): Promise<void> {
     await this.store.upsertContact(contact);
     this.contacts.set(contact.identityKey, {
       relayOnly: contact.relayOnly,
@@ -288,7 +314,95 @@ export class OrpalClient {
       boards: { preferred: contact.preferredBoards ?? [], fallback: contact.fallbackBoards ?? [] },
       autoAcceptMigration: contact.autoAcceptMigration ?? false,
     });
-    return { ok: true, contact };
+  }
+
+  /** Bulk-export contacts as a versioned JSON bundle (issue #41). Excludes the
+   *  loopback diagnostic contact and never includes private keys or history. The
+   *  shell gates the resulting file write behind an explicit user action. */
+  async exportContacts(): Promise<string> {
+    const contacts = await this.store.listContacts();
+    return serializeContacts(contacts, { now: this.opts.now });
+  }
+
+  /** Import a previously exported bundle (issue #41). Every entry is re-validated
+   *  through the same binding check as a single scanned card; bad/mismatched
+   *  bindings are rejected (never stored). Non-destructive: existing contacts are
+   *  never deleted, and collisions resolve per `onCollision` (default `"skip"`).
+   *  Returns a summary of imported / skipped / rejected counts. */
+  async importContacts(
+    input: string | ContactsExport,
+    opts: { onCollision?: "skip" | "overwrite" } = {},
+  ): Promise<ImportSummary> {
+    let bundle: ContactsExport;
+    if (typeof input === "string") {
+      const parsed = parseContactsExport(input);
+      if (!parsed.valid || !parsed.bundle) {
+        return { imported: 0, skipped: 0, rejected: [{ identityKey: "(bundle)", reason: parsed.reason ?? "invalid" }] };
+      }
+      bundle = parsed.bundle;
+    } else {
+      bundle = input;
+    }
+    const existingKeys = (await this.store.listContacts()).map((c) => c.identityKey);
+    const { contacts, summary } = importContactsBundle(bundle, {
+      onCollision: opts.onCollision,
+      existingKeys,
+      ownKey: this.identityKey,
+      now: this.opts.now,
+    });
+    for (const contact of contacts) await this.registerContact(contact);
+    return summary;
+  }
+
+  /** Ensure the diagnostic loopback test contact exists (issue #41), creating it
+   *  from this device's own public identity if absent. Idempotent: returns the
+   *  existing loopback contact when one is already stored. */
+  async ensureLoopbackContact(opts: { name?: string } = {}): Promise<Contact> {
+    const existing = (await this.store.listContacts()).find((c) => c.isLoopback);
+    if (existing) return existing;
+    const contact = makeLoopbackContact(this.identity.exportPublic(), { name: opts.name, now: this.opts.now });
+    await this.registerContact(contact);
+    return contact;
+  }
+
+  /** Run the loopback diagnostic self-test (issue #41).
+   *
+   *  NOTE on scope: a true message round-trip to one's OWN identity is not
+   *  possible over the ORP secure channel -- `deriveDirectionalKeys` splits the
+   *  send/recv keys by comparing the two transport keys, which collapses when both
+   *  ends share one identity, and a board won't rendezvous a device with itself.
+   *  So instead of a network echo this verifies the two locally-checkable halves
+   *  of "is my setup working?": (1) the board is reachable, and (2) the sealing
+   *  pipeline + this device's own keys round-trip -- a message sealed to our own
+   *  transport key opens cleanly with our own transport private key (the exact
+   *  seal/open the messaging path uses, just kept on-device). */
+  async runLoopbackSelfTest(): Promise<LoopbackSelfTestResult> {
+    const contact = await this.ensureLoopbackContact();
+    const boardReachable = this.brokerStateValue === "open";
+    let cryptoRoundTrip = false;
+    let reason: string | undefined;
+    try {
+      const probe: SealablePayload = {
+        v: 1,
+        t: "text",
+        id: newId(),
+        text: `loopback-${b64uEncode(randomBytes(8))}`,
+        ts: Date.now(),
+      };
+      const wire = this.encodeSealed(contact.transportKey, probe);
+      const outer = decodeAppFrame(wire);
+      if (!outer || outer.t !== "sealed") {
+        reason = "seal-encode-failed";
+      } else {
+        const inner = openSealedFrame(outer, this.identity.transportPrivate(), this.identity.transportPub);
+        cryptoRoundTrip = !!inner && inner.t === "text" && inner.text === probe.text;
+        if (!cryptoRoundTrip) reason = "decrypt-mismatch";
+      }
+    } catch (err) {
+      reason = err instanceof Error ? err.message : String(err);
+    }
+    if (cryptoRoundTrip && !boardReachable) reason = "board-unreachable";
+    return { ok: boardReachable && cryptoRoundTrip, boardReachable, cryptoRoundTrip, reason };
   }
 
   listContacts(): Promise<Contact[]> {
