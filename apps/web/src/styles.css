@@ -484,6 +484,76 @@ textarea.mono,
     animation: none;
   }
 }
+
+/* 🥒 "show me what you got" easter egg — the Cromulons descend */
+.schwifty-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  cursor: pointer;
+  background: radial-gradient(circle at 50% 42%, rgba(40, 110, 60, 0.55), rgba(0, 0, 0, 0.82));
+  animation: schwifty-fade 0.35s ease-out;
+}
+.schwifty-portal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(70vw, 70vh);
+  height: min(70vw, 70vh);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #0a3a14, #7ed957, #1c6e2c, #aef58a, #0a3a14);
+  filter: blur(6px) saturate(1.3);
+  opacity: 0.55;
+  box-shadow: 0 0 80px 30px rgba(126, 217, 87, 0.45);
+  animation: schwifty-spin 5s linear infinite;
+}
+.schwifty-head {
+  position: absolute;
+  top: -16vh;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5));
+  animation-name: schwifty-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.schwifty-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: "Arial Black", Arial, sans-serif;
+  font-weight: 900;
+  font-size: clamp(26px, 7vw, 64px);
+  letter-spacing: 1px;
+  text-align: center;
+  color: #eaffd8;
+  text-shadow: 0 0 14px rgba(126, 217, 87, 0.9), 0 3px 0 #1c6e2c, 0 6px 18px rgba(0, 0, 0, 0.7);
+  animation: schwifty-pulse 0.7s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes schwifty-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes schwifty-spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes schwifty-fall {
+  0% { transform: translateY(0) translateX(0) rotate(-8deg); }
+  100% { transform: translateY(130vh) translateX(var(--drift, 0)) rotate(8deg); }
+}
+@keyframes schwifty-pulse {
+  from { transform: translate(-50%, -50%) scale(1); }
+  to { transform: translate(-50%, -50%) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .schwifty-overlay { animation: none; }
+  .schwifty-portal { animation: none; }
+  .schwifty-head { animation-duration: 6s !important; animation-iteration-count: 1; }
+  .schwifty-banner { animation: none; }
+}
+
 .error-mascot {
   width: 120px;
   height: auto;

@@ -3,6 +3,7 @@ import { shortKey } from "@orpal/core";
 import { useOrpal } from "../state/orpal-context.js";
 import { MessageBubble } from "./MessageBubble.js";
 import { CrabMascot } from "./CrabMascot.js";
+import { PortalEasterEgg, EASTER_EGG_PHRASE } from "./PortalEasterEgg.js";
 
 export function Conversation() {
   const {
@@ -22,6 +23,7 @@ export function Conversation() {
     brokerState,
   } = useOrpal();
   const [draft, setDraft] = useState("");
+  const [schwifty, setSchwifty] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +56,12 @@ export function Conversation() {
 
   const onSend = () => {
     if (!draft.trim()) return;
+    // Easter egg: never sent to the peer, just opens the portal.
+    if (draft.trim().toLowerCase() === EASTER_EGG_PHRASE) {
+      setSchwifty(true);
+      setDraft("");
+      return;
+    }
     sendText(draft);
     setDraft("");
   };
@@ -66,6 +74,7 @@ export function Conversation() {
 
   return (
     <main className="conversation">
+      {schwifty && <PortalEasterEgg onClose={() => setSchwifty(false)} />}
       <header className="convo-header">
         <div className="convo-title">
           <button
