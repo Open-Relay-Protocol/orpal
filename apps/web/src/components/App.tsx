@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { OrpalProvider, useOrpal } from "../state/orpal-context.js";
 import { Sidebar } from "./Sidebar.js";
 import { Conversation } from "./Conversation.js";
@@ -11,7 +11,11 @@ import { ContactRequestModal } from "./ContactRequestModal.js";
 import { CrabMascot } from "./CrabMascot.js";
 
 function Shell() {
-  const { status, errorMsg, selected, pendingIncomingMigrations, contactRequests } = useOrpal();
+  const { status, errorMsg, selected, pendingIncomingMigrations, contactRequests, totalUnread } = useOrpal();
+
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) Orpal` : "Orpal";
+  }, [totalUnread]);
   const [modal, setModal] = useState<null | "identity" | "add" | "settings" | "migration">(null);
   const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(new Set());
 

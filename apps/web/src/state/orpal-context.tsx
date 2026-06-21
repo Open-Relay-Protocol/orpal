@@ -125,6 +125,9 @@ interface OrpalContextValue {
 
   gatherBackupPayload: () => Promise<BackupPayload>;
   restoreBackupPayload: (payload: BackupPayload) => Promise<void>;
+
+  unreadByContact: Record<string, number>;
+  totalUnread: number;
 }
 
 // Placeholder settings before the real ones load (empty, not the real defaults,
@@ -180,6 +183,11 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
   const [pendingIncomingMigrations, setPendingIncomingMigrations] = useState<readonly PendingMigration[]>([]);
   const [contactRequests, setContactRequests] = useState<ContactRequest[]>([]);
+  const [unreadByContact, setUnreadByContact] = useState<Record<string, number>>({});
+  const lastReadRef = useRef<Record<string, number>>(
+    (() => { try { return JSON.parse(localStorage.getItem("orpal:lastRead") ?? "{}"); } catch { return {}; } })(),
+  );
+  const selectedRef = useRef<string | null>(null);
 
   const upsertMessage = useCallback((m: StoredMessage) => {
     setMessagesByContact((prev) => {
@@ -189,6 +197,12 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
       next.sort((a, b) => a.ts - b.ts);
       return { ...prev, [m.contactKey]: next };
     });
+    if (m.direction === "in" && m.contactKey !== selectedRef.current) {
+      const lastRead = lastReadRef.current[m.contactKey] ?? 0;
+      if (m.ts > lastRead) {
+        setUnreadByContact((prev) => ({ ...prev, [m.contactKey]: (prev[m.contactKey] ?? 0) + 1 }));
+      }
+    }
   }, []);
 
   const refreshContacts = useCallback(async () => {
@@ -294,9 +308,19 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
   const select = useCallback(
     (key: string | null) => {
       setSelected(key);
+      selectedRef.current = key;
+      if (key) {
+        lastReadRef.current[key] = Date.now();
+        try { localStorage.setItem("orpal:lastRead", JSON.stringify(lastReadRef.current)); } catch { /* quota */ }
+        setUnreadByContact((prev) => {
+          if (!prev[key]) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }
       const orpal = orpalRef.current;
       if (!key || !orpal) return;
-      // Load history lazily, then best-effort connect to learn reachability.
       void (async () => {
         const hist = await orpal.history(key, { limit: 500 });
         setMessagesByContact((prev) => ({ ...prev, [key]: [...hist].reverse() }));
@@ -687,6 +711,8 @@ export function OrpalProvider({ children }: { children: ReactNode }) {
     setAutoAcceptMigration,
     gatherBackupPayload,
     restoreBackupPayload,
+    unreadByContact,
+    totalUnread: Object.values(unreadByContact).reduce((sum, n) => sum + n, 0),
   };
 
   return <OrpalContext.Provider value={value}>{children}</OrpalContext.Provider>;
