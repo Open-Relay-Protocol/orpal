@@ -126,9 +126,17 @@ export function Sidebar(props: {
         })}
       </div>
 
-      <footer className="sidebar-foot" title="Built on the Open Relay Protocol">
-        <img className="info-logo" src={orpLogo} alt="" aria-hidden="true" />
-        <span className="info-caption">Open Relay Protocol</span>
+      <footer className="sidebar-foot">
+        <a
+          className="info-link"
+          href="https://openrelayprotocol.com"
+          target="_blank"
+          rel="noreferrer noopener"
+          title="Built on the Open Relay Protocol"
+        >
+          <img className="info-logo" src={orpLogo} alt="" aria-hidden="true" />
+          <span className="info-caption">Open Relay Protocol</span>
+        </a>
       </footer>
     </aside>
   );
